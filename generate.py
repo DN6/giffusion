@@ -168,8 +168,8 @@ def run(
     num_inference_steps=50,
     guidance_scale=7.5,
     seed=42,
-    scheduler="pndms",
     fps=24,
+    scheduler="pndms",
 ):
     if experiment:
         experiment.log_parameters(

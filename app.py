@@ -10,6 +10,7 @@ def predict(
     guidance_scale,
     seed,
     fps,
+    scheduler,
 ):
     output_video = run(
         video_input,
@@ -18,6 +19,7 @@ def predict(
         guidance_scale,
         seed,
         fps,
+        scheduler,
     )
 
     return output_video
@@ -29,13 +31,13 @@ with demo:
     with gr.Row():
         with gr.Tabs():
             with gr.TabItem("Diffusion"):
-                with gr.Row("Prompts"):
+                with gr.Row():
                     text_prompt_input = gr.Textbox(
                         lines=10,
                         value="""0: A corgi in the clouds\n60: A corgi in the ocean""",
                         label="Text Prompts",
                     )
-                with gr.Row("Model Settings"):
+                with gr.Row():
                     seed = gr.Number(value=42, label="Numerical Seed")
                     num_iteration_steps = gr.Slider(
                         10, 1000, step=10, value=50, label="Number of Iteration Steps"
@@ -48,7 +50,7 @@ with demo:
                         label="Classifier Free Guidance Scale",
                     )
                     fps = gr.Slider(
-                        10, 60, step=1, value=24, label="Output Video Frames Per Second"
+                        10, 60, step=1, value=24, label="Output GIF Frames Rate"
                     )
                     scheduler = gr.Dropdown(["klms", "ddim", "pndms"], value="pndms")
 
@@ -67,6 +69,7 @@ with demo:
                 guidance_scale,
                 seed,
                 fps,
+                scheduler,
             ],
             outputs=video_output,
         )
