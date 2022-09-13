@@ -4,7 +4,6 @@ from generate import run
 
 
 def predict(
-    video_input,
     text_prompt_input,
     num_iteration_steps,
     guidance_scale,
@@ -13,7 +12,6 @@ def predict(
     scheduler,
 ):
     output_video = run(
-        video_input,
         text_prompt_input,
         num_iteration_steps,
         guidance_scale,
@@ -52,12 +50,12 @@ with demo:
                     fps = gr.Slider(
                         10, 60, step=1, value=24, label="Output GIF Frames Rate"
                     )
-                    scheduler = gr.Dropdown(["klms", "ddim", "pndms"], value="pndms")
+                    scheduler = gr.Dropdown(
+                        ["klms", "ddim", "pndms"], value="pndms", label="Scheduler"
+                    )
 
     with gr.Row():
-        video_output = gr.Video(
-            label="Model Output", interactive=True, elem_id="video-output"
-        )
+        output = gr.Image(label="Model Output", elem_id="output")
 
     with gr.Row():
         submit = gr.Button(label="Submit", variant="primary")
@@ -71,7 +69,7 @@ with demo:
                 fps,
                 scheduler,
             ],
-            outputs=video_output,
+            outputs=output,
         )
 
 demo.launch(share=True, debug=True)
