@@ -80,4 +80,6 @@ with demo:
         )
 
 demo.queue(concurrency_count=2)
-demo.launch(share=True, debug=True)
+
+if __name__ == "__main__":
+    demo.launch(share=True)
