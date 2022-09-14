@@ -82,4 +82,4 @@ with demo:
 demo.queue(concurrency_count=2)
 
 if __name__ == "__main__":
-    demo.launch(share=True)
+    demo.launch(share=True, debug=True)
