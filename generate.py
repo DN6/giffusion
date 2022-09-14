@@ -16,6 +16,7 @@ from torchvision import transforms as T
 from tqdm import tqdm
 
 from comet import start_experiment
+from safety_checker import StableDiffusionSafetyChecker
 from utils import parse_key_frames, slerp
 
 PRETRAINED_MODEL_NAME = os.getenv(
@@ -49,12 +50,6 @@ SCHEDULERS = dict(
 
 
 experiment = start_experiment()
-if experiment:
-    run_path = f"../generated/{experiment.name}"
-else:
-    run_path = f"../generated/{datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}"
-
-os.makedirs(run_path, exist_ok=True)
 
 
 def save_gif(frames, filename="./output.gif", fps=24):
@@ -252,6 +247,13 @@ def run(
     fps=24,
     scheduler="pndms",
 ):
+    if experiment:
+        run_path = f"../generated/{experiment.name}"
+    else:
+        run_path = f"../generated/{datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}"
+
+    os.makedirs(run_path, exist_ok=True)
+
     if experiment:
         experiment.log_parameters(
             {
