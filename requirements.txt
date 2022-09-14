@@ -4,3 +4,4 @@ typer
 av
 ftfy
 gradio
+comet_ml

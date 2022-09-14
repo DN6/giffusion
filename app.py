@@ -11,7 +11,7 @@ def predict(
     fps,
     scheduler,
 ):
-    output_video = run(
+    output = run(
         text_prompt_input,
         num_iteration_steps,
         guidance_scale,
@@ -20,7 +20,14 @@ def predict(
         scheduler,
     )
 
-    return output_video
+    return output
+
+
+def set_output(output_option):
+    if output_option == "mp4":
+        return gr.Video
+
+    return gr.Image
 
 
 demo = gr.Blocks()
@@ -72,4 +79,5 @@ with demo:
             outputs=output,
         )
 
+demo.queue(concurrency_count=2)
 demo.launch(share=True, debug=True)

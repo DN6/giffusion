@@ -1,7 +1,7 @@
-import glob
 import inspect
 import os
 import uuid
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -11,7 +11,7 @@ import typer
 from diffusers import StableDiffusionPipeline
 from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from PIL import Image
-from torch import autocast
+from torch import autocast, embedding
 from torchvision import transforms as T
 from tqdm import tqdm
 
@@ -50,22 +50,21 @@ SCHEDULERS = dict(
 
 experiment = start_experiment()
 if experiment:
-    run_path = f"./{experiment.name}"
+    run_path = f"../generated/{experiment.name}"
 else:
-    run_path = f"./{uuid.uuid4().hex}"
+    run_path = f"../generated/{datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}"
 
 os.makedirs(run_path, exist_ok=True)
 
 
 def save_gif(frames, filename="./output.gif", fps=24):
-    imgs = (Image.open(f) for f in sorted(glob.glob(frames)))
+    imgs = [Image.open(f) for f in sorted(frames)]
+    imgs += imgs[-1:1:-1]
     duration = len(imgs) // fps
-
-    img = next(imgs)
-    img.save(
+    imgs[0].save(
         fp=filename,
         format="GIF",
-        append_images=imgs,
+        append_images=imgs[1:],
         save_all=True,
         duration=duration,
         loop=1,
@@ -100,15 +99,16 @@ def denoise(latents, pipe, text_embeddings, i, t, guidance_scale):
     if accepts_eta:
         extra_step_kwargs["eta"] = 0.0
 
-    latent_model_input = torch.cat([latents] * 2)
+    latent_model_input = torch.cat([latents] * text_embeddings.shape[0])
 
     noise_pred = pipe.unet(
         latent_model_input, t, encoder_hidden_states=text_embeddings
     )["sample"]
 
-    noise_pred_uncond, noise_pred_cond = noise_pred[0].unsqueeze(0), noise_pred[
-        1:
-    ].mean(dim=0, keepdim=True)
+    pred_decomp = noise_pred.chunk(text_embeddings.shape[0])
+    noise_pred_uncond, noise_pred_cond = pred_decomp[0], torch.cat(
+        pred_decomp[1:], dim=0
+    ).mean(dim=0, keepdim=True)
     noise_pred = noise_pred_uncond + guidance_scale * (
         noise_pred_cond - noise_pred_uncond
     )
@@ -131,12 +131,12 @@ def diffuse_latents(
     cond_latents,
     num_inference_steps=50,
     guidance_scale=7.5,
-    generator=None,
     offset=1,
     eta=0.0,
 ):
 
-    batch_size, n, h, w = cond_latents.shape
+    batch_size = 1
+
     # set timesteps
     accepts_offset = "offset" in set(
         inspect.signature(pipe.scheduler.set_timesteps).parameters.keys()
@@ -164,9 +164,7 @@ def diffuse_latents(
     uncond_embeddings = pipe.text_encoder(uncond_input.input_ids.to(device))[0]
     text_embeddings = torch.cat([uncond_embeddings, cond_embeddings])
 
-    noise = torch.randn(cond_latents.shape, device=device, generator=generator)
-    latents = noise
-
+    latents = cond_latents
     for i, t in enumerate(pipe.scheduler.timesteps):
         if isinstance(pipe.scheduler, LMSDiscreteScheduler):
             sigma = pipe.scheduler.sigmas[i]
@@ -189,70 +187,61 @@ def latents_to_image(pipe, latents):
 
 
 @torch.no_grad()
-def get_text_embeddings(key_frames, pipe):
-    frame_start = key_frames[0][0]
+def prompt_to_embedding(pipe, prompt):
+    if "|" in prompt:
+        prompt = [x.strip() for x in prompt.split("|")]
+    text_inputs = pipe.tokenizer(
+        prompt,
+        padding="max_length",
+        max_length=pipe.tokenizer.model_max_length,
+        truncation=True,
+        return_tensors="pt",
+    )
+    text_inputs = text_inputs.input_ids.to(pipe.text_encoder.device)
+    text_embeddings = pipe.text_encoder(text_inputs)[0]
 
-    if frame_start != 0:
-        key_frames.append([0, ""])
-
-    output = {}
-    for i, prompt in key_frames:
-        text_inputs = pipe.tokenizer(
-            prompt,
-            padding="max_length",
-            max_length=pipe.tokenizer.model_max_length,
-            truncation=True,
-            return_tensors="pt",
-        )
-        text_inputs = text_inputs.input_ids.to(pipe.text_encoder.device)
-        text_embeddings = pipe.text_encoder(text_inputs)[0]
-        output[i] = text_embeddings.cpu()
-
-    for start, end in zip(key_frames, key_frames[1:]):
-        start_frame_idx = start[0]
-        end_frame_idx = end[0]
-        weights = torch.linspace(0, 1.0, steps=(end_frame_idx - start_frame_idx))
-
-        start_embedding = output[start_frame_idx]
-        end_embedding = output[end_frame_idx]
-
-        for i in range(start_frame_idx + 1, end_frame_idx):
-            weight = weights[i - start_frame_idx]
-            embedding = slerp(weight.item(), start_embedding, end_embedding)
-            output[i] = embedding
-
-    return output
+    return text_embeddings
 
 
 @torch.no_grad()
-def get_init_latents(key_frames, pipe, height, width, generator):
-    frame_start = key_frames[0][0]
+def interpolate_latents_and_text_embeddings(key_frames, pipe, height, width, generator):
+    text_output = {}
+    latent_output = {}
 
-    if frame_start != 0:
-        key_frames.append([0, ""])
+    start_key_frame, *key_frames = key_frames
+    start_frame_idx, start_prompt = start_key_frame
 
-    output = {}
-    for i, prompt in key_frames:
-        output[i] = torch.randn(
-            (pipe.unet.in_channels, height // 8, width // 8),
+    start_latent = torch.randn(
+        (1, pipe.unet.in_channels, height // 8, width // 8),
+        device=pipe.device,
+        generator=generator,
+    )
+    start_text_embeddings = prompt_to_embedding(pipe, start_prompt)
+
+    for key_frame in key_frames:
+        current_frame_idx, current_prompt = key_frame
+
+        current_latent = torch.randn(
+            (1, pipe.unet.in_channels, height // 8, width // 8),
             device=pipe.device,
             generator=generator,
-        ).cpu()
+        )
+        current_text_embeddings = prompt_to_embedding(pipe, current_prompt)
 
-    for start, end in zip(key_frames, key_frames[1:]):
-        start_frame_idx = start[0]
-        end_frame_idx = end[0]
-        weights = torch.linspace(0, 1.0, steps=(end_frame_idx - start_frame_idx))
+        num_steps = current_frame_idx - start_frame_idx
+        for i, t in enumerate(np.linspace(0, 1, num_steps + 1)):
+            latents = slerp(float(t), start_latent, current_latent)
+            embeddings = slerp(float(t), start_text_embeddings, current_text_embeddings)
 
-        start_embedding = output[start_frame_idx]
-        end_embedding = output[end_frame_idx]
+            latent_output[i + start_frame_idx] = latents
+            text_output[i + start_frame_idx] = embeddings
 
-        for i in range(start_frame_idx + 1, end_frame_idx):
-            weight = weights[i - start_frame_idx]
-            embedding = slerp(weight.item(), start_embedding, end_embedding)
-            output[i] = embedding
+        start_latent = current_latent
+        start_text_embeddings = current_text_embeddings
 
-    return output
+        start_frame_idx = current_frame_idx
+
+    return latent_output, text_output
 
 
 def run(
@@ -281,8 +270,9 @@ def run(
     key_frames = parse_key_frames(text_prompt_inputs)
     max_frames = max(key_frames, key=lambda x: x[0])[0]
 
-    init_latents = get_init_latents(key_frames, pipe, 512, 512, generator)
-    text_embeddings = get_text_embeddings(key_frames, pipe)
+    init_latents, text_embeddings = interpolate_latents_and_text_embeddings(
+        key_frames, pipe, 512, 512, generator
+    )
 
     output_frames = []
     for frame_idx in tqdm(range(max_frames + 1), total=max_frames + 1):
@@ -299,14 +289,11 @@ def run(
                 init_latent,
                 num_inference_steps,
                 guidance_scale,
-                generator,
             )
-            image_tensors = latents_to_image(pipe, latents)
+            images = latents_to_image(pipe, latents)
 
         img_save_path = f"{run_path}/{frame_idx:04d}.png"
-        images = numpy_to_pil(image_tensors.numpy())
         images[0].save(img_save_path)
-
         output_frames.append(img_save_path)
 
         if experiment:
