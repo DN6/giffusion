@@ -1,23 +1,27 @@
 import inspect
+import logging
 import os
 import uuid
 from datetime import datetime
 
 import numpy as np
 import torch
-import torchvision
 import torchvision.transforms.functional as F
 import typer
 from diffusers import StableDiffusionPipeline
 from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from PIL import Image
-from torch import autocast, embedding
+from torch import autocast
 from torchvision import transforms as T
 from tqdm import tqdm
+from transformers import CLIPConfig, CLIPFeatureExtractor
 
 from comet import start_experiment
 from safety_checker import StableDiffusionSafetyChecker
 from utils import parse_key_frames, slerp
+
+logger = logging.getLogger(__name__)
+
 
 PRETRAINED_MODEL_NAME = os.getenv(
     "PRETRAINED_MODEL_NAME", "CompVis/stable-diffusion-v1-4"
@@ -27,7 +31,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 pipe = StableDiffusionPipeline.from_pretrained(
     PRETRAINED_MODEL_NAME, use_auth_token=True
 )
+pipe.enable_attention_slicing()
 pipe.to(device)
+
+clip_feature_extractor = CLIPFeatureExtractor.from_pretrained(
+    "openai/clip-vit-base-patch32"
+)
+safety_checker = StableDiffusionSafetyChecker(config=CLIPConfig)
+
+OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "../generated")
 
 SCHEDULERS = dict(
     pndms=PNDMScheduler(
@@ -49,11 +61,11 @@ SCHEDULERS = dict(
 )
 
 
-experiment = start_experiment()
-
-
-def save_gif(frames, filename="./output.gif", fps=24):
+def save_gif(frames, filename="./output.gif", fps=24, quality=95):
     imgs = [Image.open(f) for f in sorted(frames)]
+    if quality < 95:
+        imgs = [img.resize((128, 128), Image.LANCZOS) for img in imgs]
+
     imgs += imgs[-1:1:-1]
     duration = len(imgs) // fps
     imgs[0].save(
@@ -63,6 +75,7 @@ def save_gif(frames, filename="./output.gif", fps=24):
         save_all=True,
         duration=duration,
         loop=1,
+        quality=99,
     )
 
 
@@ -198,8 +211,33 @@ def prompt_to_embedding(pipe, prompt):
     return text_embeddings
 
 
+def pad_embedding(pipe, start, end):
+    if start.shape == start.shape:
+        return start, end
+
+    smaller = min(
+        [start, end],
+        key=lambda key: key.shape[0],
+    )
+    larger = max(
+        [start, end],
+        key=lambda key: key.shape[0],
+    )
+    diff = larger.shape[0] - smaller.shape[0]
+
+    padding = torch.cat([prompt_to_embedding(pipe, "")] * diff)
+    if start.shape[0] < end.shape[0]:
+        start = torch.cat([start, padding])
+    else:
+        end = torch.cat([end, padding])
+
+    return start, end
+
+
 @torch.no_grad()
-def interpolate_latents_and_text_embeddings(key_frames, pipe, height, width, generator):
+def interpolate_latents_and_text_embeddings(
+    key_frames, pipe, height, width, generator, use_fixed_latent=False
+):
     text_output = {}
     latent_output = {}
 
@@ -216,16 +254,25 @@ def interpolate_latents_and_text_embeddings(key_frames, pipe, height, width, gen
     for key_frame in key_frames:
         current_frame_idx, current_prompt = key_frame
 
-        current_latent = torch.randn(
-            (1, pipe.unet.in_channels, height // 8, width // 8),
-            device=pipe.device,
-            generator=generator,
+        current_latent = (
+            start_latent
+            if use_fixed_latent
+            else torch.randn(
+                (1, pipe.unet.in_channels, height // 8, width // 8),
+                device=pipe.device,
+                generator=generator,
+            )
         )
         current_text_embeddings = prompt_to_embedding(pipe, current_prompt)
 
         num_steps = current_frame_idx - start_frame_idx
         for i, t in enumerate(np.linspace(0, 1, num_steps + 1)):
             latents = slerp(float(t), start_latent, current_latent)
+
+            start_text_embeddings, current_text_embeddings = pad_embedding(
+                pipe, start_text_embeddings, current_text_embeddings
+            )
+
             embeddings = slerp(float(t), start_text_embeddings, current_text_embeddings)
 
             latent_output[i + start_frame_idx] = latents
@@ -246,11 +293,16 @@ def run(
     seed=42,
     fps=24,
     scheduler="pndms",
+    use_fixed_latent=False,
 ):
+
+    experiment = start_experiment()
     if experiment:
-        run_path = f"../generated/{experiment.name}"
+        run_path = os.path.join(OUTPUT_BASE_PATH, experiment.name)
     else:
-        run_path = f"../generated/{datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}"
+        run_path = os.path.join(
+            OUTPUT_BASE_PATH, datetime.today().strftime("%Y-%m-%d-%H:%M:%S")
+        )
 
     os.makedirs(run_path, exist_ok=True)
 
@@ -263,6 +315,7 @@ def run(
                 "scheduler": scheduler,
                 "seed": seed,
                 "fps": fps,
+                "use_fixed_latent": use_fixed_latent,
             }
         )
     pipe.scheduler = SCHEDULERS.get(scheduler)
@@ -273,7 +326,7 @@ def run(
     max_frames = max(key_frames, key=lambda x: x[0])[0]
 
     init_latents, text_embeddings = interpolate_latents_and_text_embeddings(
-        key_frames, pipe, 512, 512, generator
+        key_frames, pipe, 512, 512, generator, use_fixed_latent
     )
 
     output_frames = []
@@ -294,20 +347,38 @@ def run(
             )
             images = latents_to_image(pipe, latents)
 
+        output_image = images[0]
+
+        safety_checker_input = clip_feature_extractor(
+            output_image, return_tensors="pt"
+        ).to(device)
+        image, has_nsfw_concept = safety_checker(
+            images=image, clip_input=safety_checker_input.pixel_values
+        )
+        if has_nsfw_concept:
+            if experiment:
+                experiment.log_other("has_nsfw_concept", True)
+
         img_save_path = f"{run_path}/{frame_idx:04d}.png"
-        images[0].save(img_save_path)
+        output_image.save(img_save_path)
         output_frames.append(img_save_path)
 
         if experiment:
-            experiment.log_image(img_save_path, image_name=f"{frame_idx:04d}")
+            experiment.log_image(
+                img_save_path, image_name=f"{frame_idx:04d}", step=frame_idx
+            )
 
     output_filename = f"{run_path}/output.gif"
     save_gif(frames=output_frames, filename=output_filename, fps=fps)
 
+    preview_filename = f"{run_path}/output-preview.gif"
+    save_gif(frames=output_frames, filename=preview_filename, fps=fps, quality=35)
+
     if experiment:
         experiment.log_asset(output_filename, ftype="image")
+        experiment.log_asset(preview_filename, ftype="image")
 
-    return output_filename
+    return preview_filename
 
 
 if __name__ == "__main__":

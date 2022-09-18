@@ -10,6 +10,7 @@ def start_experiment():
         experiment = comet_ml.APIExperiment(
             workspace=workspace, project_name=project_name
         )
+        experiment.log_other("Created from", "stable-diffusion")
         return experiment
 
     except Exception as e:

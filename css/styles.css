@@ -1,0 +1,20 @@
+#prompt-generator-btn {
+    width: 100%;
+    background-color: #A288D1;
+}
+
+#submit-btn {
+    width: 100%;
+    background-color: #BA3434;
+    color: white;
+}
+
+#output-row {
+    width: 100%;
+}
+
+#output {
+    padding: 50%;
+    height: 512px;
+    width: 512px;
+}
