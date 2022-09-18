@@ -9,13 +9,12 @@ import torch
 import torchvision.transforms.functional as F
 import typer
 from diffusers import StableDiffusionPipeline
-from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
+                                  PNDMScheduler)
 from PIL import Image
-from safety_checker import StableDiffusionSafetyChecker
 from torch import autocast
 from torchvision import transforms as T
 from tqdm import tqdm
-from transformers import CLIPConfig, CLIPFeatureExtractor
 
 from comet import start_experiment
 from utils import parse_key_frames, slerp
