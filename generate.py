@@ -9,7 +9,8 @@ import torch
 import torchvision.transforms.functional as F
 import typer
 from diffusers import StableDiffusionPipeline
-from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
+                                  PNDMScheduler)
 from PIL import Image
 from torch import autocast
 from torchvision import transforms as T
@@ -37,7 +38,10 @@ pipe.to(device)
 clip_feature_extractor = CLIPFeatureExtractor.from_pretrained(
     "openai/clip-vit-base-patch32"
 )
+clip_feature_extractor.to(device)
+
 safety_checker = StableDiffusionSafetyChecker(config=CLIPConfig)
+safety_checker.to(device)
 
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "../generated")
 
