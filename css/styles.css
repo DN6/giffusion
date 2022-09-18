@@ -10,11 +10,11 @@
 }
 
 #output-row {
-    width: 100%;
+    width: 100%
 }
 
 #output {
-    padding: 50%;
+    padding: 0% 25% 0% 25%;
     height: 512px;
     width: 512px;
 }
