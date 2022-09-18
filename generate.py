@@ -9,16 +9,15 @@ import torch
 import torchvision.transforms.functional as F
 import typer
 from diffusers import StableDiffusionPipeline
-from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
-                                  PNDMScheduler)
+from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from PIL import Image
+from safety_checker import StableDiffusionSafetyChecker
 from torch import autocast
 from torchvision import transforms as T
 from tqdm import tqdm
 from transformers import CLIPConfig, CLIPFeatureExtractor
 
 from comet import start_experiment
-from safety_checker import StableDiffusionSafetyChecker
 from utils import parse_key_frames, slerp
 
 logger = logging.getLogger(__name__)
@@ -34,14 +33,6 @@ pipe = StableDiffusionPipeline.from_pretrained(
 )
 pipe.enable_attention_slicing()
 pipe.to(device)
-
-clip_feature_extractor = CLIPFeatureExtractor.from_pretrained(
-    "openai/clip-vit-base-patch32"
-)
-clip_feature_extractor.to(device)
-
-safety_checker = StableDiffusionSafetyChecker(config=CLIPConfig)
-safety_checker.to(device)
 
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "../generated")
 
@@ -353,13 +344,13 @@ def run(
 
         output_image = images[0]
 
-        safety_checker_input = clip_feature_extractor(
+        safety_checker_input = pipe.feature_extractor(
             output_image, return_tensors="pt"
         ).to(device)
-        image, has_nsfw_concept = safety_checker(
+        image, has_nsfw_concept = pipe.safety_checker(
             images=image, clip_input=safety_checker_input.pixel_values
         )
-        if has_nsfw_concept:
+        if any(has_nsfw_concept):
             if experiment:
                 experiment.log_other("has_nsfw_concept", True)
 
