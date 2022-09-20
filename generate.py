@@ -347,14 +347,14 @@ def run(
             output_image, return_tensors="pt"
         ).to(device)
         image, has_nsfw_concept = pipe.safety_checker(
-            images=image, clip_input=safety_checker_input.pixel_values
+            images=output_image, clip_input=safety_checker_input.pixel_values
         )
         if any(has_nsfw_concept):
             if experiment:
                 experiment.log_other("has_nsfw_concept", True)
 
         img_save_path = f"{run_path}/{frame_idx:04d}.png"
-        output_image.save(img_save_path)
+        image.save(img_save_path)
         output_frames.append(img_save_path)
 
         if experiment:
