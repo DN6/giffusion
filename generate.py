@@ -291,10 +291,7 @@ def run(
 ):
 
     experiment = start_experiment()
-    if experiment:
-        run_path = os.path.join(OUTPUT_BASE_PATH, experiment.name)
-    else:
-        run_path = os.path.join(
+    run_path = os.path.join(
             OUTPUT_BASE_PATH, datetime.today().strftime("%Y-%m-%d-%H:%M:%S")
         )
 
