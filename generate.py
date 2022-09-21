@@ -355,7 +355,7 @@ def run(
                 experiment.log_other("has_nsfw_concept", True)
 
             experiment.log_image(
-                img_save_path, image_name=f"{frame_idx:04d}", step=frame_idx
+                img_save_path, image_name="frame", step=frame_idx
             )
 
     output_filename = f"{run_path}/output.gif"
