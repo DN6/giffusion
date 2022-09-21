@@ -78,7 +78,6 @@ def postprocess(images):
     images = (images * 255).to(torch.uint8)
     images = images.permute(0, 2, 3, 1)
     images = images.cpu().numpy()
-    images = numpy_to_pil(images)
 
     return images
 
@@ -184,8 +183,17 @@ def latents_to_image(pipe, latents):
     latents = 1 / 0.18215 * latents
     images = pipe.vae.decode(latents).sample
     images = postprocess(images)
+    pil_images = numpy_to_pil(images)
 
-    return images
+    safety_checker_input = pipe.feature_extractor(
+        pil_images, return_tensors="pt"
+    ).to(device)
+
+    output_images, has_nsfw_concept = pipe.safety_checker(
+        images=images, clip_input=safety_checker_input.pixel_values
+    )
+
+    return numpy_to_pil(output_images), has_nsfw_concept
 
 
 @torch.no_grad()
@@ -336,25 +344,16 @@ def run(
                 num_inference_steps,
                 guidance_scale,
             )
-            images = latents_to_image(pipe, latents)
-
-        output_image = images[0]
-
-        safety_checker_input = pipe.feature_extractor(
-            output_image, return_tensors="pt"
-        ).to(device)
-        image, has_nsfw_concept = pipe.safety_checker(
-            images=output_image, clip_input=safety_checker_input.pixel_values
-        )
-        if any(has_nsfw_concept):
-            if experiment:
-                experiment.log_other("has_nsfw_concept", True)
+            images, has_nsfw_concept = latents_to_image(pipe, latents)
 
         img_save_path = f"{run_path}/{frame_idx:04d}.png"
-        image.save(img_save_path)
+        images[0].save(img_save_path)
         output_frames.append(img_save_path)
 
         if experiment:
+            if any(has_nsfw_concept):
+                experiment.log_other("has_nsfw_concept", True)
+
             experiment.log_image(
                 img_save_path, image_name=f"{frame_idx:04d}", step=frame_idx
             )
