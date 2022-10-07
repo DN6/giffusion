@@ -1,22 +1,22 @@
 import inspect
 import logging
 import os
-import uuid
 from datetime import datetime
 
+import imageio
 import numpy as np
 import torch
 import torchvision.transforms.functional as F
 import typer
 from diffusers import StableDiffusionPipeline
-from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
-                                  PNDMScheduler)
+from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from PIL import Image
 from torch import autocast
 from torchvision import transforms as T
 from tqdm import tqdm
 
 from comet import start_experiment
+from flows import GiffusionFlow
 from utils import parse_key_frames, slerp
 
 logger = logging.getLogger(__name__)
@@ -185,9 +185,9 @@ def latents_to_image(pipe, latents):
     images = postprocess(images)
     pil_images = numpy_to_pil(images)
 
-    safety_checker_input = pipe.feature_extractor(
-        pil_images, return_tensors="pt"
-    ).to(device)
+    safety_checker_input = pipe.feature_extractor(pil_images, return_tensors="pt").to(
+        device
+    )
 
     output_images, has_nsfw_concept = pipe.safety_checker(
         images=images, clip_input=safety_checker_input.pixel_values
@@ -237,7 +237,7 @@ def pad_embedding(pipe, start, end):
 
 
 @torch.no_grad()
-def interpolate_latents_and_text_embeddings(
+def get_init_latents_and_text_embeddings(
     key_frames, pipe, height, width, generator, use_fixed_latent=False
 ):
     text_output = {}
@@ -300,9 +300,8 @@ def run(
 
     experiment = start_experiment()
     run_path = os.path.join(
-            OUTPUT_BASE_PATH, datetime.today().strftime("%Y-%m-%d-%H:%M:%S")
-        )
-
+        OUTPUT_BASE_PATH, datetime.today().strftime("%Y-%m-%d-%H:%M:%S")
+    )
     os.makedirs(run_path, exist_ok=True)
 
     if experiment:
@@ -320,43 +319,29 @@ def run(
     pipe.scheduler = SCHEDULERS.get(scheduler)
 
     generator = torch.Generator(device=device).manual_seed(int(seed))
-
-    key_frames = parse_key_frames(text_prompt_inputs)
-    max_frames = max(key_frames, key=lambda x: x[0])[0]
-
-    init_latents, text_embeddings = interpolate_latents_and_text_embeddings(
-        key_frames, pipe, 512, 512, generator, use_fixed_latent
+    flow = GiffusionFlow(
+        pipe,
+        text_prompt_inputs,
+        guidance_scale,
+        num_inference_steps,
+        512,
+        512,
+        device,
+        generator=generator,
     )
+    max_frames = flow.max_frames
 
     output_frames = []
     for frame_idx in tqdm(range(max_frames + 1), total=max_frames + 1):
-        init_latent = init_latents[frame_idx]
-        text_embedding = text_embeddings[frame_idx]
-
-        init_latent = init_latent.to(device)
-        text_embedding = text_embedding.to(device)
-
         with autocast("cuda"):
-            latents = diffuse_latents(
-                pipe,
-                text_embedding,
-                init_latent,
-                num_inference_steps,
-                guidance_scale,
-            )
-            images, has_nsfw_concept = latents_to_image(pipe, latents)
+            images = flow.create(frame_idx)
 
         img_save_path = f"{run_path}/{frame_idx:04d}.png"
         images[0].save(img_save_path)
         output_frames.append(img_save_path)
 
         if experiment:
-            if any(has_nsfw_concept):
-                experiment.log_other("has_nsfw_concept", True)
-
-            experiment.log_image(
-                img_save_path, image_name="frame", step=frame_idx
-            )
+            experiment.log_image(img_save_path, image_name="frame", step=frame_idx)
 
     output_filename = f"{run_path}/output.gif"
     save_gif(frames=output_frames, filename=output_filename, fps=fps)
