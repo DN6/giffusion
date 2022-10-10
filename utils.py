@@ -1,5 +1,6 @@
 import re
 
+import librosa
 import numpy as np
 import torch
 
@@ -14,6 +15,46 @@ def parse_key_frames(prompts, prompt_parser=None):
         frames.append([int(kf_idx), kf_prompt])
 
     return frames
+
+
+def onset_detect(audio, fps):
+    x, sr = librosa.load(audio)
+    onset_frames = librosa.onset.onset_detect(
+        x, sr=sr, wait=1, pre_avg=1, post_avg=1, pre_max=1, post_max=1
+    )
+    onset_times = librosa.frames_to_time(onset_frames)
+    frames = [int(ot * fps) for ot in onset_times]
+    return frames
+
+
+def sync_prompts_to_audio(text_prompt_inputs, audio_input, fps):
+    audio_key_frames = onset_detect(audio_input, fps)
+    text_key_frames = parse_key_frames(text_prompt_inputs)
+
+    output = {}
+    for start, end in zip(text_key_frames, text_key_frames[1:]):
+        start_key_frame, start_prompt = start
+        end_key_frame, end_prompt = end
+
+        for akf in audio_key_frames:
+            if output.get(akf) is not None:
+                continue
+
+            if akf < end_key_frame:
+                output[akf] = start_prompt
+
+    max_text_key_frame_idx, max_text_key_frame_prompt = max(
+        text_key_frames, key=lambda x: x[0]
+    )
+
+    for akf in audio_key_frames:
+        if akf >= max_text_key_frame_idx:
+            output[akf] = max_text_key_frame_prompt
+
+    output = [[k, v] for k, v in output.items()]
+    output = sorted(output, key=lambda x: x[0])
+
+    return output
 
 
 def slerp(t, v0, v1, DOT_THRESHOLD=0.9995):

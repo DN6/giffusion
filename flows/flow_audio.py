@@ -3,16 +3,17 @@ import inspect
 import numpy as np
 import torch
 from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
-from utils import parse_key_frames, slerp
+from utils import slerp, sync_prompts_to_audio
 
 from flow_base import BaseFlow
 
 
-class GiffusionFlow(BaseFlow):
+class AudioReactiveFlow(BaseFlow):
     def __init__(
         self,
         pipe,
         text_prompts,
+        audio_input,
         guidance_scale,
         num_inference_steps,
         width,
@@ -21,6 +22,7 @@ class GiffusionFlow(BaseFlow):
         device,
         seed=42,
         batch_size=1,
+        fps=10,
         generator=None,
     ):
         super().__init__(pipe, device, batch_size)
@@ -33,7 +35,8 @@ class GiffusionFlow(BaseFlow):
         self.generator = generator
         self.seed = seed
 
-        self.key_frames = parse_key_frames(text_prompts)
+        self.key_frames = sync_prompts_to_audio(text_prompts, audio_input, fps)
+        self.max_frames = max(self.key_frames, key=lambda x: x[0])[0]
         (
             self.init_latents,
             self.text_embeddings,
@@ -71,7 +74,6 @@ class GiffusionFlow(BaseFlow):
                 else torch.randn(
                     (1, self.pipe.unet.in_channels, height // 8, width // 8),
                     device=self.pipe.device,
-                    generator=generator,
                 )
             )
             current_text_embeddings = self.prompt_to_embedding(current_prompt)

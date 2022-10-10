@@ -23,6 +23,7 @@ def predict(
     fps,
     scheduler,
     use_fixed_latent,
+    audio_input,
     output_format,
 ):
     output = run(
@@ -33,6 +34,7 @@ def predict(
         fps,
         scheduler,
         use_fixed_latent,
+        audio_input,
         output_format,
     )
 
@@ -73,6 +75,9 @@ with demo:
                     value="pndms",
                     label="Scheduler",
                 )
+            with gr.TabItem("Audio Settings"):
+                audio_input = gr.Audio(label="Audio Input")
+
             with gr.TabItem("Output Settings"):
                 output_format = gr.Radio(["gif", "mp4"], value="gif")
                 fps = gr.Slider(10, 60, step=1, value=10, label="Output GIF Frame Rate")
@@ -104,6 +109,7 @@ with demo:
             fps,
             scheduler,
             use_fixed_latent,
+            audio_input,
             output_format,
         ],
         outputs=output,
