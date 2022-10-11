@@ -5,7 +5,7 @@ import torch
 from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from utils import slerp, sync_prompts_to_audio
 
-from flow_base import BaseFlow
+from .flow_base import BaseFlow
 
 
 class AudioReactiveFlow(BaseFlow):
@@ -36,7 +36,7 @@ class AudioReactiveFlow(BaseFlow):
         self.seed = seed
 
         self.key_frames = sync_prompts_to_audio(text_prompts, audio_input, fps)
-        self.max_frames = max(self.key_frames, key=lambda x: x[0])[0]
+        self.max_frames, _ = max(self.key_frames, key=lambda x: x[0])
         (
             self.init_latents,
             self.text_embeddings,

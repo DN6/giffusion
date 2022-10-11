@@ -8,8 +8,7 @@ import numpy as np
 import torch
 import typer
 from diffusers import StableDiffusionPipeline
-from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
-                                  PNDMScheduler)
+from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from PIL import Image
 from torch import autocast
 from torchvision import transforms as T
@@ -131,27 +130,27 @@ def run(
             experiment.log_asset(audio_input)
 
         flow = AudioReactiveFlow(
-            pipe,
-            text_prompt_inputs,
-            audio_input,
-            guidance_scale,
-            num_inference_steps,
-            512,
-            512,
-            device,
+            pipe=pipe,
+            text_prompts=text_prompt_inputs,
+            audio_input=audio_input,
+            guidance_scale=guidance_scale,
+            num_inference_steps=num_inference_steps,
+            height=512,
+            widht=512,
+            device=device,
             fps=fps,
             use_fixed_latent=use_fixed_latent,
             generator=generator,
         )
     else:
         flow = GiffusionFlow(
-            pipe,
-            text_prompt_inputs,
-            guidance_scale,
-            num_inference_steps,
-            512,
-            512,
-            device,
+            pipe=pipe,
+            text_prompts=text_prompt_inputs,
+            guidance_scale=guidance_scale,
+            num_inference_steps=num_inference_steps,
+            height=512,
+            width=512,
+            device=device,
             use_fixed_latent=use_fixed_latent,
             generator=generator,
         )

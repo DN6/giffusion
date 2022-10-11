@@ -5,7 +5,7 @@ import torch
 from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from utils import parse_key_frames, slerp
 
-from flow_base import BaseFlow
+from .flow_base import BaseFlow
 
 
 class GiffusionFlow(BaseFlow):
