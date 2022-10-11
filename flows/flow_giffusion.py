@@ -21,6 +21,7 @@ class GiffusionFlow(BaseFlow):
         device,
         seed=42,
         batch_size=1,
+        fps=10,
         generator=None,
     ):
         super().__init__(pipe, device, batch_size)
@@ -120,8 +121,7 @@ class GiffusionFlow(BaseFlow):
             extra_set_kwargs["offset"] = offset
         self.pipe.scheduler.set_timesteps(num_inference_steps, **extra_set_kwargs)
 
-        if isinstance(self.pipe.scheduler, LMSDiscreteScheduler):
-            cond_latents = cond_latents * self.pipe.scheduler.sigmas[0]
+        cond_latents = cond_latents * self.pipe.scheduler.init_noise_sigma
 
         accepts_eta = "eta" in set(
             inspect.signature(self.pipe.scheduler.step).parameters.keys()
@@ -144,11 +144,7 @@ class GiffusionFlow(BaseFlow):
 
         latents = cond_latents
         for i, t in enumerate(self.pipe.scheduler.timesteps):
-            if isinstance(self.pipe.scheduler, LMSDiscreteScheduler):
-                sigma = self.pipe.scheduler.sigmas[i]
-                # the model input needs to be scaled to match the continuous ODE formulation in K-LMS
-                latents = latents / ((sigma**2 + 1) ** 0.5)
-
+            latents = self.pipe.scheduler.scale_model_input(latents, t)
             latents = self.denoise(latents, text_embeddings, i, t, guidance_scale)
 
         return latents
@@ -175,14 +171,9 @@ class GiffusionFlow(BaseFlow):
         noise_pred = noise_pred_uncond + guidance_scale * (
             noise_pred_cond - noise_pred_uncond
         )
-        if isinstance(self.pipe.scheduler, LMSDiscreteScheduler):
-            latents = self.pipe.scheduler.step(
-                noise_pred, i, latents, **extra_step_kwargs
-            )["prev_sample"]
-        else:
-            latents = self.pipe.scheduler.step(
-                noise_pred, t, latents, **extra_step_kwargs
-            )["prev_sample"]
+        latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs)[
+            "prev_sample"
+        ]
 
         return latents
 
