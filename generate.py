@@ -15,8 +15,7 @@ from torchvision import transforms as T
 from tqdm import tqdm
 
 from comet import start_experiment
-from flows import GiffusionFlow
-from flows.flow_audio import AudioReactiveFlow
+from flows import AudioReactiveFlow, GiffusionFlow
 
 logger = logging.getLogger(__name__)
 
