@@ -172,7 +172,7 @@ class GiffusionFlow(BaseFlow):
         noise_pred = noise_pred_uncond + guidance_scale * (
             noise_pred_cond - noise_pred_uncond
         )
-        latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs)[
+        latents = self.pipe.scheduler.step(noise_pred, t, latents, **extra_step_kwargs)[
             "prev_sample"
         ]
 
