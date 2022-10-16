@@ -35,6 +35,7 @@ class GiffusionFlow(BaseFlow):
         self.seed = seed
 
         self.key_frames = parse_key_frames(text_prompts)
+        self.max_frames, _ = max(self.key_frames, key=lambda x: x[0])
         (
             self.init_latents,
             self.text_embeddings,
