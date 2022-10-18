@@ -8,7 +8,8 @@ import numpy as np
 import torch
 import typer
 from diffusers import StableDiffusionPipeline
-from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
+                                  PNDMScheduler)
 from PIL import Image
 from torch import autocast
 from torchvision import transforms as T
@@ -135,7 +136,7 @@ def run(
             guidance_scale=guidance_scale,
             num_inference_steps=num_inference_steps,
             height=512,
-            widht=512,
+            width=512,
             device=device,
             fps=fps,
             use_fixed_latent=use_fixed_latent,
@@ -175,10 +176,10 @@ def run(
         save_gif(frames=output_frames, filename=preview_filename, fps=fps, quality=35)
 
     if output_format == "mp4":
-        output_filename = f"{run_path}/output.video"
+        output_filename = f"{run_path}/output.mp4"
         save_video(frames=output_frames, filename=output_filename, fps=fps)
 
-        preview_filename = f"{run_path}/output-preview.video"
+        preview_filename = f"{run_path}/output-preview.mp4"
         save_video(frames=output_frames, filename=preview_filename, fps=fps, quality=35)
 
     if experiment:

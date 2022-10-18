@@ -76,7 +76,7 @@ with demo:
                     label="Scheduler",
                 )
             with gr.TabItem("Audio Settings"):
-                audio_input = gr.Audio(label="Audio Input")
+                audio_input = gr.Audio(label="Audio Input", type="filepath")
 
             with gr.TabItem("Output Settings"):
                 output_format = gr.Radio(["gif", "mp4"], value="gif")

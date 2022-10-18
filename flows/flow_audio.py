@@ -2,7 +2,8 @@ import inspect
 
 import numpy as np
 import torch
-from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
+                                  PNDMScheduler)
 from utils import slerp, sync_prompts_to_audio
 
 from .flow_base import BaseFlow

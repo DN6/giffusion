@@ -5,3 +5,4 @@ av
 ftfy
 gradio
 comet_ml
+imageio-ffmpeg

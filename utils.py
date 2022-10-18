@@ -51,6 +51,11 @@ def sync_prompts_to_audio(text_prompt_inputs, audio_input, fps):
         if akf >= max_text_key_frame_idx:
             output[akf] = max_text_key_frame_prompt
 
+    min_text_key_frame_idx, min_text_key_frame_prompt = min(
+        text_key_frames, key=lambda x: x[0]
+    )
+    output[min_text_key_frame_idx] = min_text_key_frame_prompt
+
     output = [[k, v] for k, v in output.items()]
     output = sorted(output, key=lambda x: x[0])
 
