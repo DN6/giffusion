@@ -79,7 +79,7 @@ with demo:
                 audio_input = gr.Audio(label="Audio Input", type="filepath")
 
             with gr.TabItem("Output Settings"):
-                output_format = gr.Radio(["gif", "mp4"], value="gif")
+                output_format = gr.Radio(["gif", "mp4"], value="mp4")
                 fps = gr.Slider(10, 60, step=1, value=10, label="Output GIF Frame Rate")
 
     with gr.Row():

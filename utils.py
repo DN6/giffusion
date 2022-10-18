@@ -1,8 +1,10 @@
 import re
 
+import imageio
 import librosa
 import numpy as np
 import torch
+from PIL import Image
 
 
 def parse_key_frames(prompts, prompt_parser=None):
@@ -19,12 +21,16 @@ def parse_key_frames(prompts, prompt_parser=None):
 
 def onset_detect(audio, fps):
     x, sr = librosa.load(audio)
+    max_audio_frame = int((len(x) / sr) * fps)
+
     onset_frames = librosa.onset.onset_detect(
         x, sr=sr, wait=1, pre_avg=1, post_avg=1, pre_max=1, post_max=1
     )
     onset_times = librosa.frames_to_time(onset_frames)
     frames = [int(ot * fps) for ot in onset_times]
-    return frames
+    frames.append(max_audio_frame)
+
+    return onset_times, frames
 
 
 def sync_prompts_to_audio(text_prompt_inputs, audio_input, fps):
@@ -88,3 +94,32 @@ def slerp(t, v0, v1, DOT_THRESHOLD=0.9995):
         v2 = torch.from_numpy(v2).to(input_device)
 
     return v2
+
+
+def save_gif(frames, filename="./output.gif", fps=24, quality=95):
+    imgs = [Image.open(f) for f in sorted(frames)]
+    if quality < 95:
+        imgs = [img.resize((128, 128), Image.LANCZOS) for img in imgs]
+
+    imgs += imgs[-1:1:-1]
+    duration = len(imgs) // fps
+    imgs[0].save(
+        fp=filename,
+        format="GIF",
+        append_images=imgs[1:],
+        save_all=True,
+        duration=duration,
+        loop=1,
+        quality=99,
+    )
+
+
+def save_video(frames, filename="./output.mp4", fps=24, quality=95):
+    imgs = [Image.open(f) for f in sorted(frames)]
+    if quality < 95:
+        imgs = [img.resize((128, 128), Image.LANCZOS) for img in imgs]
+
+    writer = imageio.get_writer(filename, fps=fps)
+    for img in imgs:
+        writer.append_data(np.array(img))
+    writer.close()

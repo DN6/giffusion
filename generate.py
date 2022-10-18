@@ -8,8 +8,7 @@ import numpy as np
 import torch
 import typer
 from diffusers import StableDiffusionPipeline
-from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
-                                  PNDMScheduler)
+from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from PIL import Image
 from torch import autocast
 from torchvision import transforms as T
@@ -17,6 +16,7 @@ from tqdm import tqdm
 
 from comet import start_experiment
 from flows import AudioReactiveFlow, GiffusionFlow
+from utils import save_gif, save_video
 
 logger = logging.getLogger(__name__)
 
@@ -52,35 +52,6 @@ SCHEDULERS = dict(
         beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
     ),
 )
-
-
-def save_gif(frames, filename="./output.gif", fps=24, quality=95):
-    imgs = [Image.open(f) for f in sorted(frames)]
-    if quality < 95:
-        imgs = [img.resize((128, 128), Image.LANCZOS) for img in imgs]
-
-    imgs += imgs[-1:1:-1]
-    duration = len(imgs) // fps
-    imgs[0].save(
-        fp=filename,
-        format="GIF",
-        append_images=imgs[1:],
-        save_all=True,
-        duration=duration,
-        loop=1,
-        quality=99,
-    )
-
-
-def save_video(frames, filename="./output.mp4", fps=24, quality=95):
-    imgs = [Image.open(f) for f in sorted(frames)]
-    if quality < 95:
-        imgs = [img.resize((128, 128), Image.LANCZOS) for img in imgs]
-
-    writer = imageio.get_writer(filename, fps=fps)
-    for img in imgs:
-        writer.append_data(np.array(img))
-    writer.close()
 
 
 def postprocess(images):
