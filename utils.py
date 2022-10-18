@@ -30,7 +30,7 @@ def onset_detect(audio, fps):
     frames = [int(ot * fps) for ot in onset_times]
     frames.append(max_audio_frame)
 
-    return onset_times, frames
+    return frames
 
 
 def sync_prompts_to_audio(text_prompt_inputs, audio_input, fps):
