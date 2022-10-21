@@ -1,15 +1,11 @@
-import inspect
 import logging
 import os
 from datetime import datetime
 
-import imageio
-import numpy as np
 import torch
 import typer
 from diffusers import StableDiffusionPipeline
 from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
-from PIL import Image
 from torch import autocast
 from torchvision import transforms as T
 from tqdm import tqdm
@@ -52,15 +48,6 @@ SCHEDULERS = dict(
         beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
     ),
 )
-
-
-def postprocess(images):
-    images = (images / 2 + 0.5).clamp(0, 1)
-    images = (images * 255).to(torch.uint8)
-    images = images.permute(0, 2, 3, 1)
-    images = images.cpu().numpy()
-
-    return images
 
 
 def run(

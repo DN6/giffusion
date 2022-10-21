@@ -2,9 +2,8 @@ import inspect
 
 import numpy as np
 import torch
-from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
-                                  PNDMScheduler)
-from utils import slerp, sync_prompts_to_audio
+from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from utils import onset_detect, parse_key_frames, slerp, sync_prompts_to_audio
 
 from .flow_base import BaseFlow
 
@@ -36,13 +35,15 @@ class AudioReactiveFlow(BaseFlow):
         self.generator = generator
         self.seed = seed
 
-        self.key_frames = sync_prompts_to_audio(text_prompts, audio_input, fps)
+        self.key_frames = parse_key_frames(text_prompts)
         self.max_frames, _ = max(self.key_frames, key=lambda x: x[0])
+        self.fps = fps
         (
             self.init_latents,
             self.text_embeddings,
         ) = self.get_init_latents_and_text_embeddings(
             self.key_frames,
+            audio_input,
             self.height,
             self.width,
             self.generator,
@@ -51,13 +52,20 @@ class AudioReactiveFlow(BaseFlow):
 
     @torch.no_grad()
     def get_init_latents_and_text_embeddings(
-        self, key_frames, height, width, generator, use_fixed_latent=False
+        self, key_frames, audio_input, height, width, generator, use_fixed_latent=False
     ):
         text_output = {}
         latent_output = {}
 
+        onsets = onset_detect(audio_input, self.fps, return_envelope=True)
+
+        onset_envelope = onsets["envelope"]
+        onset_beats = onsets["beats"]
+
+        frames = list(map(lambda x: x[0], key_frames))
+
         start_key_frame, *key_frames = key_frames
-        start_frame_idx, start_prompt = start_key_frame
+        start_frame, start_prompt = start_key_frame
 
         start_latent = torch.randn(
             (1, self.pipe.unet.in_channels, height // 8, width // 8),
@@ -67,7 +75,18 @@ class AudioReactiveFlow(BaseFlow):
         start_text_embeddings = self.prompt_to_embedding(start_prompt)
 
         for key_frame in key_frames:
-            current_frame_idx, current_prompt = key_frame
+            current_frame, current_prompt = key_frame
+
+            start_frame_idx = frames.index(start_frame)
+            current_frame_idx = frames.index(current_frame)
+
+            start_beat_idx = onset_beats[start_frame_idx]
+            current_beat_idx = onset_beats[current_frame_idx]
+
+            num_frames = current_frame - start_frame
+            interp_schedule = 1.0 - np.resize(
+                onset_envelope[start_beat_idx : current_beat_idx + 1], num_frames + 1
+            )
 
             current_latent = (
                 start_latent
@@ -79,25 +98,24 @@ class AudioReactiveFlow(BaseFlow):
             )
             current_text_embeddings = self.prompt_to_embedding(current_prompt)
 
-            num_steps = current_frame_idx - start_frame_idx
-            for i, t in enumerate(np.linspace(0, 1, num_steps + 1)):
+            for i, t in enumerate(interp_schedule):
                 latents = slerp(float(t), start_latent, current_latent)
 
                 start_text_embeddings, current_text_embeddings = self.pad_embedding(
                     start_text_embeddings, current_text_embeddings
                 )
 
-                embeddings = slerp(
-                    float(t), start_text_embeddings, current_text_embeddings
+                embeddings = torch.lerp(
+                    start_text_embeddings, current_text_embeddings, t
                 )
 
-                latent_output[i + start_frame_idx] = latents
-                text_output[i + start_frame_idx] = embeddings
+                latent_output[i + start_frame] = latents
+                text_output[i + start_frame] = embeddings
 
             start_latent = current_latent
             start_text_embeddings = current_text_embeddings
 
-            start_frame_idx = current_frame_idx
+            start_frame = current_frame
 
         return latent_output, text_output
 

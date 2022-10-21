@@ -1,6 +1,7 @@
 import gradio as gr
 
 from generate import run
+from utils import sync_prompts_to_audio
 
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
@@ -10,6 +11,14 @@ def generate_prompt(fps):
     prompts = [
         f"{idx * fps}: {prompt}" for idx, prompt in enumerate(prompts.split("\n"))
     ]
+    prompts = "\n".join(prompts)
+
+    return prompts
+
+
+def _sync_prompts_to_audio(text_inputs, audio_input, fps):
+    key_frames = sync_prompts_to_audio(text_inputs, audio_input, fps)
+    prompts = [f"{frame_idx}: {prompt}" for frame_idx, prompt in key_frames]
     prompts = "\n".join(prompts)
 
     return prompts
@@ -46,7 +55,7 @@ demo = gr.Blocks(css="css/styles.css")
 with demo:
     with gr.Row():
         text_prompt_input = gr.Textbox(
-            lines=10,
+            lines=20,
             value="""0: A corgi in the clouds\n60: A corgi in the ocean""",
             label="Text Prompts",
         )
@@ -77,6 +86,7 @@ with demo:
                 )
             with gr.TabItem("Audio Settings"):
                 audio_input = gr.Audio(label="Audio Input", type="filepath")
+                sync_audio_btn = gr.Button(value="Sync Prompts to Audio")
 
             with gr.TabItem("Output Settings"):
                 output_format = gr.Radio(["gif", "mp4"], value="mp4")
@@ -98,6 +108,12 @@ with demo:
 
     with gr.Row(elem_id="output-row"):
         output = gr.Video(label="Model Output", elem_id="output")
+
+    sync_audio_btn.click(
+        _sync_prompts_to_audio,
+        inputs=[text_prompt_input, audio_input, fps],
+        outputs=text_prompt_input,
+    )
 
     submit.click(
         fn=predict,

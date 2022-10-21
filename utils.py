@@ -19,22 +19,34 @@ def parse_key_frames(prompts, prompt_parser=None):
     return frames
 
 
-def onset_detect(audio, fps):
+def onset_detect(audio, fps, return_envelope=False):
     x, sr = librosa.load(audio)
+    hop_length = int(sr / fps)
+
     max_audio_frame = int((len(x) / sr) * fps)
 
     onset_frames = librosa.onset.onset_detect(
         x, sr=sr, wait=1, pre_avg=1, post_avg=1, pre_max=1, post_max=1
     )
     onset_times = librosa.frames_to_time(onset_frames)
+
     frames = [int(ot * fps) for ot in onset_times]
     frames.append(max_audio_frame)
 
-    return frames
+    if return_envelope:
+        onset_env = librosa.onset.onset_strength(x, sr=sr)
+        envelope = onset_env / onset_env.max()
+        _, beats = librosa.beat.beat_track(onset_envelope=envelope, sr=sr)
+
+        return {"frames": frames, "envelope": envelope, "beats": beats}
+
+    return {"frames": frames}
 
 
 def sync_prompts_to_audio(text_prompt_inputs, audio_input, fps):
-    audio_key_frames = onset_detect(audio_input, fps)
+    onsets = onset_detect(audio_input, fps)
+
+    audio_key_frames = onsets["frames"]
     text_key_frames = parse_key_frames(text_prompt_inputs)
 
     output = {}
