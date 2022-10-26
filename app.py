@@ -88,9 +88,9 @@ with demo:
                 audio_input = gr.Audio(label="Audio Input", type="filepath")
                 sync_audio_btn = gr.Button(value="Sync Prompts to Audio")
 
-            with gr.TabItem("Output Settings"):
-                output_format = gr.Radio(["gif", "mp4"], value="mp4")
-                fps = gr.Slider(10, 60, step=1, value=10, label="Output GIF Frame Rate")
+    with gr.Row():
+        output_format = gr.Radio(["gif", "mp4"], value="mp4")
+        fps = gr.Slider(10, 60, step=1, value=10, label="Output GIF Frame Rate")
 
     with gr.Row():
         generate = gr.Button(

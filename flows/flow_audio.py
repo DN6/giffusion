@@ -2,7 +2,8 @@ import inspect
 
 import numpy as np
 import torch
-from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
+                                  PNDMScheduler)
 from utils import onset_detect, parse_key_frames, slerp, sync_prompts_to_audio
 
 from .flow_base import BaseFlow
@@ -50,6 +51,12 @@ class AudioReactiveFlow(BaseFlow):
             self.use_fixed_latent,
         )
 
+    def get_interpolation_schedule(self, envelope_slices, idx, num_frames):
+        try:
+            return envelope_slices[idx]
+        except IndexError:
+            return np.linspace(0, 1, num_frames)
+
     @torch.no_grad()
     def get_init_latents_and_text_embeddings(
         self, key_frames, audio_input, height, width, generator, use_fixed_latent=False
@@ -62,60 +69,44 @@ class AudioReactiveFlow(BaseFlow):
         onset_envelope = onsets["envelope"]
         onset_beats = onsets["beats"]
 
-        frames = list(map(lambda x: x[0], key_frames))
+        envelope_slices = [
+            onset_envelope[start:end]
+            for start, end in zip(onset_beats, onset_beats[1:])
+        ]
 
-        start_key_frame, *key_frames = key_frames
-        start_frame, start_prompt = start_key_frame
+        for idx, (start_key_frame, end_key_frame) in enumerate(
+            zip(key_frames, key_frames[1:])
+        ):
+            start_frame, start_prompt = start_key_frame
+            end_frame, end_prompt = end_key_frame
 
-        start_latent = torch.randn(
-            (1, self.pipe.unet.in_channels, height // 8, width // 8),
-            device=self.pipe.device,
-            generator=generator,
-        )
-        start_text_embeddings = self.prompt_to_embedding(start_prompt)
+            start_latent = torch.randn(
+                (1, self.pipe.unet.in_channels, height // 8, width // 8),
+                device=self.pipe.device,
+                generator=generator,
+            )
+            end_latent = torch.randn(
+                (1, self.pipe.unet.in_channels, height // 8, width // 8),
+                device=self.pipe.device,
+            )
+            start_text_embeddings = self.prompt_to_embedding(start_prompt)
+            end_text_embeddings = self.prompt_to_embedding(end_prompt)
 
-        for key_frame in key_frames:
-            current_frame, current_prompt = key_frame
-
-            start_frame_idx = frames.index(start_frame)
-            current_frame_idx = frames.index(current_frame)
-
-            start_beat_idx = onset_beats[start_frame_idx]
-            current_beat_idx = onset_beats[current_frame_idx]
-
-            num_frames = current_frame - start_frame
+            num_frames = end_frame - start_frame
             interp_schedule = 1.0 - np.resize(
-                onset_envelope[start_beat_idx : current_beat_idx + 1], num_frames + 1
+                self.get_interpolation_schedule(envelope_slices, idx, num_frames),
+                num_frames + 1,
             )
-
-            current_latent = (
-                start_latent
-                if use_fixed_latent
-                else torch.randn(
-                    (1, self.pipe.unet.in_channels, height // 8, width // 8),
-                    device=self.pipe.device,
-                )
-            )
-            current_text_embeddings = self.prompt_to_embedding(current_prompt)
-
             for i, t in enumerate(interp_schedule):
-                latents = slerp(float(t), start_latent, current_latent)
+                latents = slerp(float(t), start_latent, end_latent)
 
-                start_text_embeddings, current_text_embeddings = self.pad_embedding(
-                    start_text_embeddings, current_text_embeddings
+                start_text_embeddings, end_text_embeddings = self.pad_embedding(
+                    start_text_embeddings, end_text_embeddings
                 )
-
-                embeddings = torch.lerp(
-                    start_text_embeddings, current_text_embeddings, t
-                )
+                embeddings = torch.lerp(start_text_embeddings, end_text_embeddings, t)
 
                 latent_output[i + start_frame] = latents
                 text_output[i + start_frame] = embeddings
-
-            start_latent = current_latent
-            start_text_embeddings = current_text_embeddings
-
-            start_frame = current_frame
 
         return latent_output, text_output
 

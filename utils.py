@@ -21,7 +21,6 @@ def parse_key_frames(prompts, prompt_parser=None):
 
 def onset_detect(audio, fps, return_envelope=False):
     x, sr = librosa.load(audio)
-    hop_length = int(sr / fps)
 
     max_audio_frame = int((len(x) / sr) * fps)
 
