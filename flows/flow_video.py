@@ -2,8 +2,7 @@ import inspect
 
 import numpy as np
 import torch
-from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
-                                  PNDMScheduler)
+from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from utils import load_video_frames, parse_key_frames, slerp
 
 from .flow_base import BaseFlow
@@ -41,7 +40,7 @@ class VideoInitFlow(BaseFlow):
         self.frames, self.audio, metadata = load_video_frames(video_input)
         self.key_frames = parse_key_frames(text_prompts)
 
-        self.max_frames = len(self.frames)
+        self.max_frames = max(self.key_frames, key=lambda x: x[0])
         self.fps = metadata["video_fps"]
         (
             self.init_latents,
