@@ -11,7 +11,7 @@ from torchvision import transforms as T
 from tqdm import tqdm
 
 from comet import start_experiment
-from flows import AudioReactiveFlow, GiffusionFlow
+from flows import AudioReactiveFlow, GiffusionFlow, VideoInitFlow
 from utils import save_gif, save_video
 
 logger = logging.getLogger(__name__)
@@ -54,11 +54,13 @@ def run(
     text_prompt_inputs,
     num_inference_steps=50,
     guidance_scale=7.5,
+    strength=1.0,
     seed=42,
     fps=24,
     scheduler="pndms",
     use_fixed_latent=False,
     audio_input=None,
+    video_input=None,
     output_format="gif",
 ):
 
@@ -100,6 +102,22 @@ def run(
             use_fixed_latent=use_fixed_latent,
             generator=generator,
         )
+    if video_input:
+        flow = VideoInitFlow(
+            pipe=pipe,
+            text_prompts=text_prompt_inputs,
+            video_input=video_input,
+            guidance_scale=guidance_scale,
+            strength=strength,
+            num_inference_steps=num_inference_steps,
+            height=512,
+            width=512,
+            device=device,
+            fps=fps,
+            use_fixed_latent=use_fixed_latent,
+            generator=generator,
+        )
+
     else:
         flow = GiffusionFlow(
             pipe=pipe,

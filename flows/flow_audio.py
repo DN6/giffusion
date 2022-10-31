@@ -2,8 +2,7 @@ import inspect
 
 import numpy as np
 import torch
-from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
-                                  PNDMScheduler)
+from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from utils import onset_detect, parse_key_frames, slerp, sync_prompts_to_audio
 
 from .flow_base import BaseFlow
@@ -53,7 +52,11 @@ class AudioReactiveFlow(BaseFlow):
 
     def get_interpolation_schedule(self, envelope_slices, idx, num_frames):
         try:
-            return envelope_slices[idx]
+            # from https://aiart.dev/posts/sd-music-videos/sd_music_videos.html
+            interp_schedule = np.cumsum(envelope_slices[idx])
+            interp_schedule /= max(interp_schedule)
+            return interp_schedule
+
         except IndexError:
             return np.linspace(0, 1, num_frames)
 
@@ -85,9 +88,13 @@ class AudioReactiveFlow(BaseFlow):
                 device=self.pipe.device,
                 generator=generator,
             )
-            end_latent = torch.randn(
-                (1, self.pipe.unet.in_channels, height // 8, width // 8),
-                device=self.pipe.device,
+            end_latent = (
+                start_latent
+                if use_fixed_latent
+                else torch.randn(
+                    (1, self.pipe.unet.in_channels, height // 8, width // 8),
+                    device=self.pipe.device,
+                )
             )
             start_text_embeddings = self.prompt_to_embedding(start_prompt)
             end_text_embeddings = self.prompt_to_embedding(end_prompt)
@@ -103,7 +110,7 @@ class AudioReactiveFlow(BaseFlow):
                 start_text_embeddings, end_text_embeddings = self.pad_embedding(
                     start_text_embeddings, end_text_embeddings
                 )
-                embeddings = torch.lerp(start_text_embeddings, end_text_embeddings, t)
+                embeddings = slerp(float(t), start_text_embeddings, end_text_embeddings)
 
                 latent_output[i + start_frame] = latents
                 text_output[i + start_frame] = embeddings
@@ -199,8 +206,6 @@ class AudioReactiveFlow(BaseFlow):
         image_tensors = self.decode_latents(latents)
 
         image_array = self.postprocess(image_tensors)
-        image_array, has_nsfw_content = self.safety_check(image_array)
-
         images = self.numpy_to_pil(image_array)
 
         return images

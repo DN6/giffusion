@@ -2,18 +2,21 @@ import inspect
 
 import numpy as np
 import torch
-from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
-from utils import parse_key_frames, slerp
+from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
+                                  PNDMScheduler)
+from utils import load_video_frames, parse_key_frames, slerp
 
 from .flow_base import BaseFlow
 
 
-class GiffusionFlow(BaseFlow):
+class VideoInitFlow(BaseFlow):
     def __init__(
         self,
         pipe,
         text_prompts,
+        video_input,
         guidance_scale,
+        strength,
         num_inference_steps,
         width,
         height,
@@ -30,17 +33,22 @@ class GiffusionFlow(BaseFlow):
         self.width, self.height = width, height
         self.use_fixed_latent = use_fixed_latent
         self.guidance_scale = guidance_scale
+        self.strength = strength
         self.num_inference_steps = num_inference_steps
         self.generator = generator
         self.seed = seed
 
+        self.frames, self.audio, metadata = load_video_frames(video_input)
         self.key_frames = parse_key_frames(text_prompts)
-        self.max_frames, _ = max(self.key_frames, key=lambda x: x[0])
+
+        self.max_frames = len(self.frames)
+        self.fps = metadata["video_fps"]
         (
             self.init_latents,
             self.text_embeddings,
         ) = self.get_init_latents_and_text_embeddings(
             self.key_frames,
+            self.frames,
             self.height,
             self.width,
             self.generator,
@@ -49,7 +57,7 @@ class GiffusionFlow(BaseFlow):
 
     @torch.no_grad()
     def get_init_latents_and_text_embeddings(
-        self, key_frames, height, width, generator, use_fixed_latent=False
+        self, key_frames, frames, height, width, generator, use_fixed_latent=False
     ):
         text_output = {}
         latent_output = {}
@@ -60,15 +68,12 @@ class GiffusionFlow(BaseFlow):
             start_frame, start_prompt = start_key_frame
             end_frame, end_prompt = end_key_frame
 
-            start_latent = torch.randn(
-                (1, self.pipe.unet.in_channels, height // 8, width // 8),
-                device=self.pipe.device,
-                generator=generator,
-            )
-            end_latent = torch.randn(
-                (1, self.pipe.unet.in_channels, height // 8, width // 8),
-                device=self.pipe.device,
-            )
+            start_image = self.preprocess(frames[start_frame], (height, width))
+            start_latent = self.encode_latents(start_image.unsqueeze(0))
+
+            end_image = self.preprocess(frames[end_frame], (height, width))
+            end_latent = self.encode_latents(end_image.unsqueeze(0))
+
             start_text_embeddings = self.prompt_to_embedding(start_prompt)
             end_text_embeddings = self.prompt_to_embedding(end_prompt)
 
@@ -94,8 +99,10 @@ class GiffusionFlow(BaseFlow):
         cond_latents,
         num_inference_steps=50,
         guidance_scale=7.5,
+        strength=1.0,
         offset=1,
         eta=0.0,
+        generator=None,
     ):
 
         batch_size = self.batch_size
@@ -109,7 +116,20 @@ class GiffusionFlow(BaseFlow):
             extra_set_kwargs["offset"] = offset
         self.pipe.scheduler.set_timesteps(num_inference_steps, **extra_set_kwargs)
 
-        cond_latents = cond_latents * self.pipe.scheduler.init_noise_sigma
+        init_timestep = int(num_inference_steps * strength) + offset
+        init_timestep = min(init_timestep, num_inference_steps)
+
+        timesteps = self.scheduler.timesteps[-init_timestep]
+        timesteps = torch.tensor([timesteps] * batch_size, device=self.device)
+
+        # add noise to latents using the timesteps
+        noise = torch.randn(
+            cond_latents.shape,
+            generator=generator,
+            device=self.device,
+            dtype=cond_embeddings.dtype,
+        )
+        cond_latents = self.scheduler.add_noise(cond_latents, noise, timesteps)
 
         accepts_eta = "eta" in set(
             inspect.signature(self.pipe.scheduler.step).parameters.keys()
@@ -130,8 +150,11 @@ class GiffusionFlow(BaseFlow):
         )[0]
         text_embeddings = torch.cat([uncond_embeddings, cond_embeddings])
 
+        t_start = max(num_inference_steps - init_timestep + offset, 0)
         latents = cond_latents
-        for i, t in enumerate(self.pipe.scheduler.timesteps):
+
+        diffuse_timesteps = self.pipe.scheduler.timesteps[t_start:].to(self.device)
+        for i, t in enumerate(diffuse_timesteps):
             latents = self.pipe.scheduler.scale_model_input(latents, t)
             latents = self.denoise(latents, text_embeddings, i, t, guidance_scale)
 

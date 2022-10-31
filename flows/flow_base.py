@@ -1,5 +1,9 @@
 import torch
+import torchvision.transforms as T
 from PIL import Image
+
+to_pil = T.ToPILImage("RGB")
+to_tensor = T.ToTensor()
 
 
 class BaseFlow:
@@ -7,6 +11,12 @@ class BaseFlow:
         self.pipe = pipe
         self.device = device
         self.batch_size = batch_size
+
+    def preprocess(self, image, image_size=(512, 512)):
+        image = to_pil(image)
+        image = image.resize(image_size, resample=Image.LANCZOS)
+        image = to_tensor(image)
+        return 2.0 * image - 1.0
 
     def postprocess(self, image_tensors):
         image_tensors = (image_tensors / 2 + 0.5).clamp(0, 1)
@@ -43,9 +53,9 @@ class BaseFlow:
         return sample
 
     @torch.no_grad()
-    def encode_latents(self, x):
+    def encode_latents(self, x, generator=None):
         init_latent_dist = self.pipe.vae.encode(x.to(self.device)).latent_dist
-        latent = 0.18215 * init_latent_dist.sample()
+        latent = 0.18215 * init_latent_dist.sample(generator=generator)
         return latent
 
     @torch.no_grad()
