@@ -40,7 +40,7 @@ class VideoInitFlow(BaseFlow):
         self.frames, self.audio, metadata = load_video_frames(video_input)
         self.key_frames = parse_key_frames(text_prompts)
 
-        self.max_frames = max(self.key_frames, key=lambda x: x[0])
+        self.max_frames, _ = max(self.key_frames, key=lambda x: x[0])
         self.fps = metadata["video_fps"]
         (
             self.init_latents,
@@ -118,7 +118,7 @@ class VideoInitFlow(BaseFlow):
         init_timestep = int(num_inference_steps * strength) + offset
         init_timestep = min(init_timestep, num_inference_steps)
 
-        timesteps = self.scheduler.timesteps[-init_timestep]
+        timesteps = self.pipe.scheduler.timesteps[-init_timestep]
         timesteps = torch.tensor([timesteps] * batch_size, device=self.device)
 
         # add noise to latents using the timesteps
@@ -128,7 +128,7 @@ class VideoInitFlow(BaseFlow):
             device=self.device,
             dtype=cond_embeddings.dtype,
         )
-        cond_latents = self.scheduler.add_noise(cond_latents, noise, timesteps)
+        cond_latents = self.pipe.scheduler.add_noise(cond_latents, noise, timesteps)
 
         accepts_eta = "eta" in set(
             inspect.signature(self.pipe.scheduler.step).parameters.keys()
@@ -150,24 +150,21 @@ class VideoInitFlow(BaseFlow):
         text_embeddings = torch.cat([uncond_embeddings, cond_embeddings])
 
         t_start = max(num_inference_steps - init_timestep + offset, 0)
-        latents = cond_latents
-
         diffuse_timesteps = self.pipe.scheduler.timesteps[t_start:].to(self.device)
+
+        latents = cond_latents
         for i, t in enumerate(diffuse_timesteps):
             latents = self.pipe.scheduler.scale_model_input(latents, t)
-            latents = self.denoise(latents, text_embeddings, i, t, guidance_scale)
+            latents = self.denoise(
+                latents, text_embeddings, i, t, guidance_scale, extra_step_kwargs
+            )
 
         return latents
 
     @torch.no_grad()
-    def denoise(self, latents, text_embeddings, i, t, guidance_scale):
-        accepts_eta = "eta" in set(
-            inspect.signature(self.pipe.scheduler.step).parameters.keys()
-        )
-        extra_step_kwargs = {}
-        if accepts_eta:
-            extra_step_kwargs["eta"] = 0.0
-
+    def denoise(
+        self, latents, text_embeddings, i, t, guidance_scale, extra_step_kwargs
+    ):
         latent_model_input = torch.cat([latents] * text_embeddings.shape[0])
 
         noise_pred = self.pipe.unet(
@@ -193,7 +190,12 @@ class VideoInitFlow(BaseFlow):
             self.text_embeddings[frame_idx],
         )
         latents = self.diffuse(
-            text_embeddings, init_latents, self.num_inference_steps, self.guidance_scale
+            text_embeddings,
+            init_latents,
+            self.num_inference_steps,
+            self.guidance_scale,
+            strength=self.strength,
+            generator=self.generator,
         )
         image_tensors = self.decode_latents(latents)
 
