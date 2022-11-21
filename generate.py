@@ -103,6 +103,9 @@ def run(
             generator=generator,
         )
     if video_input:
+        if experiment:
+            experiment.log_asset(video_input)
+
         flow = VideoInitFlow(
             pipe=pipe,
             text_prompts=text_prompt_inputs,

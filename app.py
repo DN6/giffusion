@@ -6,8 +6,8 @@ from utils import sync_prompts_to_audio, sync_prompts_to_video
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
 
-def generate_prompt(fps):
-    prompts = prompt_generator("")
+def generate_prompt(fps, topics=""):
+    prompts = prompt_generator(topics)
     prompts = [
         f"{idx * fps}: {prompt}" for idx, prompt in enumerate(prompts.split("\n"))
     ]
@@ -65,69 +65,78 @@ def predict(
 demo = gr.Blocks(css="css/styles.css")
 
 with demo:
+    gr.Markdown("# GIFfusion 💥")
     with gr.Row():
-        text_prompt_input = gr.Textbox(
-            lines=20,
-            value="""0: A corgi in the clouds\n60: A corgi in the ocean""",
-            label="Text Prompts",
-        )
-
-    with gr.Row():
-        with gr.Tabs():
-            with gr.TabItem("Diffusion Settings"):
-                use_fixed_latent = gr.Checkbox(label="Use Fixed Init Latent")
-                seed = gr.Number(value=42, label="Numerical Seed")
-                num_iteration_steps = gr.Slider(
-                    10,
-                    1000,
-                    step=10,
-                    value=50,
-                    label="Number of Iteration Steps",
+        with gr.Column():
+            with gr.Row():
+                output_format = gr.Radio(
+                    ["gif", "mp4"], value="mp4", label="Output Format"
                 )
-                guidance_scale = gr.Slider(
-                    0.5,
-                    20,
-                    step=0.5,
-                    value=7.5,
-                    label="Classifier Free Guidance Scale",
+                fps = gr.Slider(10, 60, step=1, value=10, label="Output Frame Rate")
+
+            with gr.Row():
+                text_prompt_input = gr.Textbox(
+                    lines=10,
+                    value="""0: A corgi in the clouds\n60: A corgi in the ocean""",
+                    label="Text Prompts",
+                    interactive=True,
                 )
-                strength = gr.Slider(
-                    0, 1.0, step=0.1, value=0.5, label="Image Strength"
+            with gr.Row():
+                topics = gr.Textbox(lines=1, value="", label="Inspiration Topics")
+            with gr.Row():
+                generate = gr.Button(
+                    value="Give me some inspiration!",
+                    variant="secondary",
+                    elem_id="prompt-generator-btn",
                 )
-                scheduler = gr.Dropdown(
-                    ["klms", "ddim", "pndms"],
-                    value="pndms",
-                    label="Scheduler",
+
+            with gr.Row():
+                with gr.Tabs():
+                    with gr.TabItem("Diffusion Settings"):
+                        use_fixed_latent = gr.Checkbox(label="Use Fixed Init Latent")
+                        seed = gr.Number(value=42, label="Numerical Seed")
+                        num_iteration_steps = gr.Slider(
+                            10,
+                            1000,
+                            step=10,
+                            value=50,
+                            label="Number of Iteration Steps",
+                        )
+                        guidance_scale = gr.Slider(
+                            0.5,
+                            20,
+                            step=0.5,
+                            value=7.5,
+                            label="Classifier Free Guidance Scale",
+                        )
+                        scheduler = gr.Dropdown(
+                            ["klms", "ddim", "pndms"],
+                            value="pndms",
+                            label="Scheduler",
+                        )
+                    with gr.TabItem("Audio Input Settings"):
+                        audio_input = gr.Audio(label="Audio Input", type="filepath")
+                        sync_audio_btn = gr.Button(value="Sync Prompts to Audio")
+
+                    with gr.TabItem("Video Input Settings"):
+                        video_input = gr.Video(label="Video Input")
+                        strength = gr.Slider(
+                            0, 1.0, step=0.1, value=0.5, label="Image Strength"
+                        )
+                        sync_video_btn = gr.Button(value="Sync Prompts to Video")
+
+            with gr.Row():
+                submit = gr.Button(
+                    label="Submit",
+                    value="Create",
+                    variant="primary",
+                    elem_id="submit-btn",
                 )
-            with gr.TabItem("Audio Input Settings"):
-                audio_input = gr.Audio(label="Audio Input", type="filepath")
-                sync_audio_btn = gr.Button(value="Sync Prompts to Audio")
 
-            with gr.TabItem("Video Input Settings"):
-                video_input = gr.Video(label="Video Input")
-                sync_video_btn = gr.Button(value="Sync Prompts to Video")
+        with gr.Column(elem_id="output"):
+            output = gr.Video(label="Model Output", elem_id="output")
 
-    with gr.Row():
-        output_format = gr.Radio(["gif", "mp4"], value="mp4", label="Output Format")
-        fps = gr.Slider(10, 60, step=1, value=10, label="Output Frame Rate")
-
-    with gr.Row():
-        generate = gr.Button(
-            value="Give me some inspiration!",
-            variant="secondary",
-            elem_id="prompt-generator-btn",
-        )
-        generate.click(generate_prompt, inputs=[fps], outputs=text_prompt_input)
-        submit = gr.Button(
-            label="Submit",
-            value="Create",
-            variant="primary",
-            elem_id="submit-btn",
-        )
-
-    with gr.Row(elem_id="output-row"):
-        output = gr.Video(label="Model Output", elem_id="output")
-
+    generate.click(generate_prompt, inputs=[fps, topics], outputs=text_prompt_input)
     sync_audio_btn.click(
         _sync_prompts_to_audio,
         inputs=[text_prompt_input, audio_input, fps],
