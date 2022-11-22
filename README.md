@@ -1,5 +1,5 @@
 # GIFfusion
-Giffusion is an application to generate GIFs using Stable Diffusion.
+Giffusion is a Web UI for generating GIFs and Videos using Stable Diffusion.
 
 Try it in Colab: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DN6/giffusion/blob/main/Giffusion.ipynb)
 
@@ -7,12 +7,17 @@ Try it in Colab: [![Open In Colab](https://colab.research.google.com/assets/cola
 
 ### Multiframe Generation
 
-Provide prompts for key frames in your GIF and Giffusion will interpolate between them to fill in the rest. For example, the prompt below will generate images for frame 0 and 60. The frames in between will created based on interpolation between the prompts.
+Giffusion follows a prompt syntax similar to the one used in [Deforum Art's Stable Diffusion Notebook](https://deforum.github.io/)
+
+Provide prompts for specific key frames in your GIF or Video, and Giffusion will interpolate between them to fill in the rest. For example, the prompt below will generate images for frame 0 and 60. The frames in between will created by interpolating between the prompts.
 
 ```
-0: A picture of a corgi
-60: A picture of a labradoodle
+0: a picture of a corgi
+60: a picture of a lion
 ```
+
+![output-corgi](https://user-images.githubusercontent.com/7529846/203226118-cbd83da1-f1d7-47f7-b7a3-e13a9c73d67e.gif)
+
 
 ### Composable Diffusion
 
@@ -20,7 +25,7 @@ Giffusion supports [Composable Diffusion](https://energy-based-model.github.io/C
 
 Composable diffusion tends to preserve the components of the individual prompts better than a single text prompt.
 
-To compose your prompts, simply separate them using an '|'. For example
+To compose your prompts, simply separate them using a '|'. For example
 
 ```
 0: A red house | a lightning storm
