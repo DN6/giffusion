@@ -1,7 +1,8 @@
 transformers
-diffusers==0.3.0
+diffusers
 typer
 av
 ftfy
 gradio
 comet_ml
+imageio-ffmpeg

@@ -1,7 +1,11 @@
 import re
 
+import librosa
 import numpy as np
 import torch
+from PIL import Image
+from torchvision.io import read_video, write_video
+from torchvision.transforms.functional import pil_to_tensor
 
 
 def parse_key_frames(prompts, prompt_parser=None):
@@ -14,6 +18,104 @@ def parse_key_frames(prompts, prompt_parser=None):
         frames.append([int(kf_idx), kf_prompt])
 
     return frames
+
+
+def onset_detect(audio, fps, return_envelope=False):
+    x, sr = librosa.load(audio)
+
+    max_audio_frame = int((len(x) / sr) * fps)
+
+    onset_frames = librosa.onset.onset_detect(
+        x, sr=sr, wait=1, pre_avg=1, post_avg=1, pre_max=1, post_max=1
+    )
+    onset_times = librosa.frames_to_time(onset_frames)
+
+    frames = [int(ot * fps) for ot in onset_times]
+    frames.append(max_audio_frame)
+
+    if return_envelope:
+        onset_env = librosa.onset.onset_strength(x, sr=sr)
+        envelope = onset_env / onset_env.max()
+
+        _, beats = librosa.beat.beat_track(onset_envelope=envelope, sr=sr)
+
+        return {"frames": frames, "envelope": envelope, "beats": beats}
+
+    return {"frames": frames}
+
+
+def sync_prompts_to_audio(text_prompt_inputs, audio_input, fps):
+    onsets = onset_detect(audio_input, fps)
+
+    audio_key_frames = onsets["frames"]
+    text_key_frames = parse_key_frames(text_prompt_inputs)
+
+    output = {}
+    for start, end in zip(text_key_frames, text_key_frames[1:]):
+        start_key_frame, start_prompt = start
+        end_key_frame, end_prompt = end
+
+        for akf in audio_key_frames:
+            if output.get(akf) is not None:
+                continue
+
+            if akf < end_key_frame:
+                output[akf] = start_prompt
+
+    max_text_key_frame_idx, max_text_key_frame_prompt = max(
+        text_key_frames, key=lambda x: x[0]
+    )
+
+    for akf in audio_key_frames:
+        if akf >= max_text_key_frame_idx:
+            output[akf] = max_text_key_frame_prompt
+
+    min_text_key_frame_idx, min_text_key_frame_prompt = min(
+        text_key_frames, key=lambda x: x[0]
+    )
+    output[min_text_key_frame_idx] = min_text_key_frame_prompt
+
+    output = [[k, v] for k, v in output.items()]
+    output = sorted(output, key=lambda x: x[0])
+
+    return output
+
+
+def sync_prompts_to_video(text_prompt_inputs, video_input):
+    video_frames, audio, fps = load_video_frames(video_input)
+    n_frames = len(video_frames)
+
+    text_key_frames = parse_key_frames(text_prompt_inputs)
+
+    output = {}
+    for start, end in zip(text_key_frames, text_key_frames[1:]):
+        start_key_frame, start_prompt = start
+        end_key_frame, end_prompt = end
+
+        for vf in range(n_frames):
+            if output.get(vf) is not None:
+                continue
+
+            if vf < end_key_frame:
+                output[vf] = start_prompt
+
+    max_text_key_frame_idx, max_text_key_frame_prompt = max(
+        text_key_frames, key=lambda x: x[0]
+    )
+
+    for vf in range(n_frames):
+        if vf >= max_text_key_frame_idx:
+            output[vf] = max_text_key_frame_prompt
+
+    min_text_key_frame_idx, min_text_key_frame_prompt = min(
+        text_key_frames, key=lambda x: x[0]
+    )
+    output[min_text_key_frame_idx] = min_text_key_frame_prompt
+
+    output = [[k, v] for k, v in output.items()]
+    output = sorted(output, key=lambda x: x[0])
+
+    return output
 
 
 def slerp(t, v0, v1, DOT_THRESHOLD=0.9995):
@@ -42,3 +144,54 @@ def slerp(t, v0, v1, DOT_THRESHOLD=0.9995):
         v2 = torch.from_numpy(v2).to(input_device)
 
     return v2
+
+
+def save_gif(frames, filename="./output.gif", fps=24, quality=95, loop=1):
+    imgs = [Image.open(f) for f in sorted(frames)]
+    if quality < 95:
+        imgs = list(map(lambda x: x.resize((128, 128), Image.LANCZOS), imgs))
+
+    imgs += imgs[-1:1:-1]
+    duration = len(imgs) // fps
+    imgs[0].save(
+        fp=filename,
+        format="GIF",
+        append_images=imgs[1:],
+        save_all=True,
+        duration=duration,
+        loop=loop,
+        quality=quality,
+    )
+
+
+def load_video_frames(path):
+    frames, audio, metadata = read_video(
+        filename=path, pts_unit="sec", output_format="TCHW"
+    )
+
+    return frames, audio, metadata
+
+
+def save_video(frames, filename="./output.mp4", fps=24, quality=95, audio_input=None):
+    imgs = [Image.open(f) for f in sorted(frames)]
+    if quality < 95:
+        imgs = list(map(lambda x: x.resize((128, 128), Image.LANCZOS), imgs))
+
+    img_tensors = [pil_to_tensor(img) for img in imgs]
+    img_tensors = list(map(lambda x: x.unsqueeze(0), img_tensors))
+
+    img_tensors = torch.cat(img_tensors)
+    img_tensors = img_tensors.permute(0, 2, 3, 1)
+
+    if audio_input:
+        audio, sr = librosa.load(audio_input)
+        audio_tensor = torch.tensor(audio).unsqueeze(0)
+
+    write_video(
+        filename,
+        video_array=img_tensors,
+        fps=fps,
+        audio_array=audio_tensor if audio_input else None,
+        audio_fps=sr if audio_input else None,
+        audio_codec="aac" if audio_input else None,
+    )
