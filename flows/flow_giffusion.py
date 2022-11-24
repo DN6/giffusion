@@ -53,6 +53,11 @@ class GiffusionFlow(BaseFlow):
     ):
         text_output = {}
         latent_output = {}
+        start_latent = torch.randn(
+            (1, self.pipe.unet.in_channels, height // 8, width // 8),
+            device=self.pipe.device,
+            generator=generator,
+        )
 
         for idx, (start_key_frame, end_key_frame) in enumerate(
             zip(key_frames, key_frames[1:])
@@ -60,11 +65,6 @@ class GiffusionFlow(BaseFlow):
             start_frame, start_prompt = start_key_frame
             end_frame, end_prompt = end_key_frame
 
-            start_latent = torch.randn(
-                (1, self.pipe.unet.in_channels, height // 8, width // 8),
-                device=self.pipe.device,
-                generator=generator,
-            )
             end_latent = torch.randn(
                 (1, self.pipe.unet.in_channels, height // 8, width // 8),
                 device=self.pipe.device,
@@ -84,6 +84,8 @@ class GiffusionFlow(BaseFlow):
 
                 latent_output[i + start_frame] = latents
                 text_output[i + start_frame] = embeddings
+
+            start_latent = end_latent
 
         return latent_output, text_output
 
