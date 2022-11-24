@@ -20,8 +20,13 @@ def parse_key_frames(prompts, prompt_parser=None):
     return frames
 
 
-def onset_detect(audio, fps, return_envelope=False):
+def onset_detect(audio, fps, audio_component):
     x, sr = librosa.load(audio)
+    harmonic, percussive = librosa.effects.hpss(x, margin=(1.0, 5.0))
+    if audio_component == "percussive":
+        x = percussive
+    if audio_component == "harmonic":
+        x = harmonic
 
     max_audio_frame = int((len(x) / sr) * fps)
 
@@ -33,89 +38,21 @@ def onset_detect(audio, fps, return_envelope=False):
     frames = [int(ot * fps) for ot in onset_times]
     frames.append(max_audio_frame)
 
-    if return_envelope:
-        onset_env = librosa.onset.onset_strength(x, sr=sr)
-        envelope = onset_env / onset_env.max()
-
-        _, beats = librosa.beat.beat_track(onset_envelope=envelope, sr=sr)
-
-        return {"frames": frames, "envelope": envelope, "beats": beats}
-
     return {"frames": frames}
 
 
-def sync_prompts_to_audio(text_prompt_inputs, audio_input, fps):
-    onsets = onset_detect(audio_input, fps)
-
+def get_audio_key_frame_information(audio_input, fps, audio_component):
+    onsets = onset_detect(audio_input, fps, audio_component)
     audio_key_frames = onsets["frames"]
-    text_key_frames = parse_key_frames(text_prompt_inputs)
 
-    output = {}
-    for start, end in zip(text_key_frames, text_key_frames[1:]):
-        start_key_frame, start_prompt = start
-        end_key_frame, end_prompt = end
-
-        for akf in audio_key_frames:
-            if output.get(akf) is not None:
-                continue
-
-            if akf < end_key_frame:
-                output[akf] = start_prompt
-
-    max_text_key_frame_idx, max_text_key_frame_prompt = max(
-        text_key_frames, key=lambda x: x[0]
-    )
-
-    for akf in audio_key_frames:
-        if akf >= max_text_key_frame_idx:
-            output[akf] = max_text_key_frame_prompt
-
-    min_text_key_frame_idx, min_text_key_frame_prompt = min(
-        text_key_frames, key=lambda x: x[0]
-    )
-    output[min_text_key_frame_idx] = min_text_key_frame_prompt
-
-    output = [[k, v] for k, v in output.items()]
-    output = sorted(output, key=lambda x: x[0])
-
-    return output
+    return audio_key_frames
 
 
-def sync_prompts_to_video(text_prompt_inputs, video_input):
+def get_video_frame_information(video_input):
     video_frames, audio, fps = load_video_frames(video_input)
     n_frames = len(video_frames)
 
-    text_key_frames = parse_key_frames(text_prompt_inputs)
-
-    output = {}
-    for start, end in zip(text_key_frames, text_key_frames[1:]):
-        start_key_frame, start_prompt = start
-        end_key_frame, end_prompt = end
-
-        for vf in range(n_frames):
-            if output.get(vf) is not None:
-                continue
-
-            if vf < end_key_frame:
-                output[vf] = start_prompt
-
-    max_text_key_frame_idx, max_text_key_frame_prompt = max(
-        text_key_frames, key=lambda x: x[0]
-    )
-
-    for vf in range(n_frames):
-        if vf >= max_text_key_frame_idx:
-            output[vf] = max_text_key_frame_prompt
-
-    min_text_key_frame_idx, min_text_key_frame_prompt = min(
-        text_key_frames, key=lambda x: x[0]
-    )
-    output[min_text_key_frame_idx] = min_text_key_frame_prompt
-
-    output = [[k, v] for k, v in output.items()]
-    output = sorted(output, key=lambda x: x[0])
-
-    return output
+    return n_frames
 
 
 def slerp(t, v0, v1, DOT_THRESHOLD=0.9995):
@@ -183,15 +120,24 @@ def save_video(frames, filename="./output.mp4", fps=24, quality=95, audio_input=
     img_tensors = torch.cat(img_tensors)
     img_tensors = img_tensors.permute(0, 2, 3, 1)
 
-    if audio_input:
-        audio, sr = librosa.load(audio_input)
+    if audio_input is not None:
+        audio_duration = len(img_tensors) / fps
+        audio, sr = librosa.load(
+            audio_input, sr=None, mono=True, duration=audio_duration
+        )
         audio_tensor = torch.tensor(audio).unsqueeze(0)
 
-    write_video(
-        filename,
-        video_array=img_tensors,
-        fps=fps,
-        audio_array=audio_tensor if audio_input else None,
-        audio_fps=sr if audio_input else None,
-        audio_codec="aac" if audio_input else None,
-    )
+        write_video(
+            filename,
+            video_array=img_tensors,
+            fps=fps,
+            audio_array=audio_tensor,
+            audio_fps=sr,
+            audio_codec="aac",
+        )
+    else:
+        write_video(
+            filename,
+            video_array=img_tensors,
+            fps=fps,
+        )

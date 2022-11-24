@@ -1,7 +1,7 @@
 import gradio as gr
 
 from generate import run
-from utils import sync_prompts_to_audio, sync_prompts_to_video
+from utils import get_audio_key_frame_information, get_video_frame_information
 
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
@@ -16,20 +16,16 @@ def generate_prompt(fps, topics=""):
     return prompts
 
 
-def _sync_prompts_to_audio(text_inputs, audio_input, fps):
-    key_frames = sync_prompts_to_audio(text_inputs, audio_input, fps)
-    prompts = [f"{frame_idx}: {prompt}" for frame_idx, prompt in key_frames]
-    prompts = "\n".join(prompts)
+def _get_audio_key_frame_information(audio_input, fps, audio_component):
+    key_frames = get_audio_key_frame_information(audio_input, fps, audio_component)
 
-    return prompts
+    return "\n".join([f"{kf}: " for kf in key_frames])
 
 
-def _sync_prompts_to_video(text_inputs, video_input):
-    key_frames = sync_prompts_to_video(text_inputs, video_input)
-    prompts = [f"{frame_idx}: {prompt}" for frame_idx, prompt in key_frames]
-    prompts = "\n".join(prompts)
+def _get_video_frame_information(video_input):
+    max_frames = get_video_frame_information(video_input)
 
-    return prompts
+    return "\n".join(["0: ", f"{max_frames - 1}: "])
 
 
 def predict(
@@ -42,6 +38,7 @@ def predict(
     scheduler,
     use_fixed_latent,
     audio_input,
+    audio_component,
     video_input,
     output_format,
 ):
@@ -55,6 +52,7 @@ def predict(
         scheduler=scheduler,
         use_fixed_latent=use_fixed_latent,
         audio_input=audio_input,
+        audio_component=audio_component,
         video_input=video_input,
         output_format=output_format,
     )
@@ -116,14 +114,19 @@ with demo:
                         )
                     with gr.TabItem("Audio Input Settings"):
                         audio_input = gr.Audio(label="Audio Input", type="filepath")
-                        sync_audio_btn = gr.Button(value="Sync Prompts to Audio")
+                        audio_info_btn = gr.Button(value="Get Key Frame Information")
+                        audio_component = gr.Radio(
+                            ["percussive", "harmonic", "both"],
+                            value="percussive",
+                            label="Audio Component",
+                        )
 
                     with gr.TabItem("Video Input Settings"):
                         video_input = gr.Video(label="Video Input")
                         strength = gr.Slider(
                             0, 1.0, step=0.1, value=0.5, label="Image Strength"
                         )
-                        sync_video_btn = gr.Button(value="Sync Prompts to Video")
+                        video_info_btn = gr.Button(value="Get Max Frames")
 
             with gr.Row():
                 submit = gr.Button(
@@ -137,14 +140,14 @@ with demo:
             output = gr.Video(label="Model Output", elem_id="output")
 
     generate.click(generate_prompt, inputs=[fps, topics], outputs=text_prompt_input)
-    sync_audio_btn.click(
-        _sync_prompts_to_audio,
-        inputs=[text_prompt_input, audio_input, fps],
+    audio_info_btn.click(
+        _get_audio_key_frame_information,
+        inputs=[audio_input, fps, audio_component],
         outputs=[text_prompt_input],
     )
-    sync_video_btn.click(
-        _sync_prompts_to_video,
-        inputs=[text_prompt_input, video_input],
+    video_info_btn.click(
+        _get_video_frame_information,
+        inputs=[video_input],
         outputs=[text_prompt_input],
     )
 
@@ -160,6 +163,7 @@ with demo:
             scheduler,
             use_fixed_latent,
             audio_input,
+            audio_component,
             video_input,
             output_format,
         ],

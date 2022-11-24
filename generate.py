@@ -60,6 +60,7 @@ def run(
     scheduler="pndms",
     use_fixed_latent=False,
     audio_input=None,
+    audio_component="both",
     video_input=None,
     output_format="gif",
 ):
@@ -93,6 +94,7 @@ def run(
             pipe=pipe,
             text_prompts=text_prompt_inputs,
             audio_input=audio_input,
+            audio_component=audio_component,
             guidance_scale=guidance_scale,
             num_inference_steps=num_inference_steps,
             height=512,
@@ -156,7 +158,13 @@ def run(
 
     if output_format == "mp4":
         output_filename = f"{run_path}/output.mp4"
-        save_video(frames=output_frames, filename=output_filename, fps=fps)
+
+        save_video(
+            frames=output_frames,
+            filename=output_filename,
+            fps=fps,
+            audio_input=audio_input,
+        )
 
         preview_filename = f"{run_path}/output-preview.mp4"
         save_video(frames=output_frames, filename=preview_filename, fps=fps, quality=35)
