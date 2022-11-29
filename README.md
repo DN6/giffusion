@@ -63,6 +63,8 @@ https://user-images.githubusercontent.com/7529846/204550451-5d2162dc-5d6b-4ecd-b
 
 To use video initialization, head over to the Video Setting tab and upload your file. The `Strength` parameter controls how well your original video content is preserved by the diffusion process. Setting higher values (greater than 0.5) will lead to the source video being ignored.
 
+https://user-images.githubusercontent.com/7529846/204581841-3fa20dd5-7cff-4ec1-aacf-2cb2bfe476b4.mp4
+
 ### Saving to Comet
 
 GIFfusion also support saving prompts, generated GIFs/Videos, images, and settings to [Comet](https://www.comet.com/site/) so you can keep track of your generative experiments.
