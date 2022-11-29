@@ -22,7 +22,7 @@ def parse_key_frames(prompts, prompt_parser=None):
 
 def onset_detect(audio, fps, audio_component):
     x, sr = librosa.load(audio)
-    harmonic, percussive = librosa.effects.hpss(x, margin=(1.0, 5.0))
+    harmonic, percussive = librosa.effects.hpss(x, margin=1.0)
     if audio_component == "percussive":
         x = percussive
     if audio_component == "harmonic":
@@ -36,6 +36,7 @@ def onset_detect(audio, fps, audio_component):
     onset_times = librosa.frames_to_time(onset_frames)
 
     frames = [int(ot * fps) for ot in onset_times]
+    frames = [0] + frames
     frames.append(max_audio_frame)
 
     return {"frames": frames}
@@ -52,7 +53,7 @@ def get_video_frame_information(video_input):
     video_frames, audio, fps = load_video_frames(video_input)
     n_frames = len(video_frames)
 
-    return n_frames
+    return n_frames, fps
 
 
 def slerp(t, v0, v1, DOT_THRESHOLD=0.9995):

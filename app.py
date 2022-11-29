@@ -19,13 +19,13 @@ def generate_prompt(fps, topics=""):
 def _get_audio_key_frame_information(audio_input, fps, audio_component):
     key_frames = get_audio_key_frame_information(audio_input, fps, audio_component)
 
-    return "\n".join([f"{kf}: " for kf in key_frames])
+    return "\n".join([f"{kf}: timestamp: {kf / fps:.2f}" for kf in key_frames])
 
 
 def _get_video_frame_information(video_input):
-    max_frames = get_video_frame_information(video_input)
+    max_frames, fps = get_video_frame_information(video_input)
 
-    return "\n".join(["0: ", f"{max_frames - 1}: "])
+    return "\n".join(["0: ", f"{max_frames - 1}: "]), gr.update(value=fps)
 
 
 def predict(
@@ -126,7 +126,7 @@ with demo:
                         strength = gr.Slider(
                             0, 1.0, step=0.1, value=0.5, label="Image Strength"
                         )
-                        video_info_btn = gr.Button(value="Get Max Frames")
+                        video_info_btn = gr.Button(value="Get Key Frame Infomation")
 
             with gr.Row():
                 submit = gr.Button(
@@ -148,7 +148,7 @@ with demo:
     video_info_btn.click(
         _get_video_frame_information,
         inputs=[video_input],
-        outputs=[text_prompt_input],
+        outputs=[text_prompt_input, fps],
     )
 
     submit.click(

@@ -2,7 +2,6 @@ import inspect
 
 import numpy as np
 import torch
-from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from utils import load_video_frames, parse_key_frames, slerp
 
 from .flow_base import BaseFlow
@@ -69,16 +68,20 @@ class VideoInitFlow(BaseFlow):
             end_frame, end_prompt = end_key_frame
 
             start_image = self.preprocess(frames[start_frame], (height, width))
-            start_latent = self.encode_latents(start_image.unsqueeze(0))
+            start_latent = self.encode_latents(
+                start_image.unsqueeze(0), generator=generator
+            )
 
             end_image = self.preprocess(frames[end_frame], (height, width))
-            end_latent = self.encode_latents(end_image.unsqueeze(0))
+            end_latent = self.encode_latents(
+                end_image.unsqueeze(0), generator=generator
+            )
 
             start_text_embeddings = self.prompt_to_embedding(start_prompt)
             end_text_embeddings = self.prompt_to_embedding(end_prompt)
 
-            num_frames = end_frame - start_frame
-            interp_schedule = np.linspace(0, 1, num_frames + 1)
+            num_frames = (end_frame - start_frame) + 1
+            interp_schedule = np.linspace(0, 1, num_frames)
             for i, t in enumerate(interp_schedule):
                 latents = slerp(float(t), start_latent, end_latent)
 
@@ -107,14 +110,8 @@ class VideoInitFlow(BaseFlow):
 
         batch_size = self.batch_size
 
-        # set timesteps
-        accepts_offset = "offset" in set(
-            inspect.signature(self.pipe.scheduler.set_timesteps).parameters.keys()
-        )
-        extra_set_kwargs = {}
-        if accepts_offset:
-            extra_set_kwargs["offset"] = offset
-        self.pipe.scheduler.set_timesteps(num_inference_steps, **extra_set_kwargs)
+        self.pipe.scheduler.set_timesteps(num_inference_steps)
+        self.pipe.scheduler.config.steps_offset = 1
 
         init_timestep = int(num_inference_steps * strength) + offset
         init_timestep = min(init_timestep, num_inference_steps)

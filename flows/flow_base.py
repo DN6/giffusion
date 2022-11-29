@@ -76,7 +76,7 @@ class BaseFlow:
         return text_embeddings
 
     def pad_embedding(self, start, end):
-        if start.shape == start.shape:
+        if start.shape == end.shape:
             return start, end
 
         smaller = min(
