@@ -16,8 +16,6 @@ class VideoInitFlow(BaseFlow):
         guidance_scale,
         strength,
         num_inference_steps,
-        width,
-        height,
         use_fixed_latent,
         device,
         seed=42,
