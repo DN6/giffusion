@@ -34,7 +34,7 @@ class VideoInitFlow(BaseFlow):
         self.seed = seed
 
         self.frames, self.audio, metadata = load_video_frames(video_input)
-        _, _, self.width, self.height = self.frames[0].size
+        _, self.width, self.height = self.frames[0].size()
 
         self.key_frames = parse_key_frames(text_prompts)
 
