@@ -3,7 +3,7 @@ import inspect
 import librosa
 import numpy as np
 import torch
-from utils import onset_detect, parse_key_frames, slerp
+from utils import parse_key_frames, slerp
 
 from .flow_base import BaseFlow
 
@@ -52,12 +52,17 @@ class AudioReactiveFlow(BaseFlow):
             self.use_fixed_latent,
         )
 
-    def get_interpolation_schedule(self, envelope, num_frames):
+    def get_interpolation_schedule(self, audio_array, sr, num_frames):
         # from https://aiart.dev/posts/sd-music-videos/sd_music_videos.html
-        interp_schedule = np.resize(envelope, num_frames)
-        interp_schedule = np.cumsum(interp_schedule)
-        interp_schedule /= interp_schedule[-1]
-        interp_schedule[0] = 0.0
+        onset_env = librosa.onset.onset_strength(audio_array, sr=sr)
+        onset_env = librosa.util.normalize(onset_env)
+
+        schedule_x = np.linspace(0, len(onset_env), len(onset_env))
+        schedule_y = np.cumsum(onset_env)
+        schedule_y /= schedule_y[-1]
+
+        resized_schedule = np.linspace(0, len(schedule_y), num_frames)
+        interp_schedule = np.interp(resized_schedule, schedule_x, schedule_y)
 
         return interp_schedule
 
@@ -75,14 +80,14 @@ class AudioReactiveFlow(BaseFlow):
         text_output = {}
         latent_output = {}
 
-        audio_array, sr = librosa.load(audio_input, sr=None)
-        harmonic, percussive = librosa.effects.hpss(audio_array, margin=(1.0, 5.0))
+        audio_array, sr = librosa.load(audio_input)
+        harmonic, percussive = librosa.effects.hpss(audio_array, margin=1.0)
+
         if audio_component == "percussive":
             audio_array = percussive
+
         if audio_component == "harmonic":
             audio_array = harmonic
-
-        frame_duration = int(sr / self.fps)
 
         start_latent = torch.randn(
             (1, self.pipe.unet.in_channels, height // 8, width // 8),
@@ -93,8 +98,10 @@ class AudioReactiveFlow(BaseFlow):
         for idx, (start_key_frame, end_key_frame) in enumerate(
             zip(key_frames, key_frames[1:])
         ):
+
             start_frame, start_prompt = start_key_frame
             end_frame, end_prompt = end_key_frame
+            num_frames = (end_frame - start_frame) + 1
 
             end_latent = (
                 start_latent
@@ -102,31 +109,27 @@ class AudioReactiveFlow(BaseFlow):
                 else torch.randn(
                     (1, self.pipe.unet.in_channels, height // 8, width // 8),
                     device=self.pipe.device,
+                    generator=generator,
                 )
             )
 
             start_text_embeddings = self.prompt_to_embedding(start_prompt)
             end_text_embeddings = self.prompt_to_embedding(end_prompt)
 
-            num_frames = end_frame - start_frame
-
             start_sample = int((start_frame / self.fps) * sr)
             end_sample = int((end_frame / self.fps) * sr)
 
             audio_slice = audio_array[start_sample:end_sample]
-            onset_env = librosa.onset.onset_strength(
-                audio_slice, sr=sr, hop_length=frame_duration
+            interp_schedule = self.get_interpolation_schedule(
+                audio_slice, sr, num_frames
             )
-            envelope = onset_env / onset_env.max()
-            interp_schedule = self.get_interpolation_schedule(envelope, num_frames)
 
             for i, t in enumerate(interp_schedule):
                 latents = slerp(float(t), start_latent, end_latent)
-
                 start_text_embeddings, end_text_embeddings = self.pad_embedding(
                     start_text_embeddings, end_text_embeddings
                 )
-                embeddings = slerp(float(t), start_text_embeddings, end_text_embeddings)
+                embeddings = torch.lerp(start_text_embeddings, end_text_embeddings, t)
 
                 latent_output[i + start_frame] = latents
                 text_output[i + start_frame] = embeddings
@@ -148,14 +151,9 @@ class AudioReactiveFlow(BaseFlow):
 
         batch_size = self.batch_size
 
-        # set timesteps
-        accepts_offset = "offset" in set(
-            inspect.signature(self.pipe.scheduler.set_timesteps).parameters.keys()
-        )
-        extra_set_kwargs = {}
-        if accepts_offset:
-            extra_set_kwargs["offset"] = offset
-        self.pipe.scheduler.set_timesteps(num_inference_steps, **extra_set_kwargs)
+        self.pipe.scheduler.set_timesteps(num_inference_steps)
+        self.pipe.scheduler.config.steps_offset = 1
+        timesteps_tensor = self.pipe.scheduler.timesteps.to(self.device)
 
         cond_latents = cond_latents * self.pipe.scheduler.init_noise_sigma
 
@@ -179,7 +177,7 @@ class AudioReactiveFlow(BaseFlow):
         text_embeddings = torch.cat([uncond_embeddings, cond_embeddings])
 
         latents = cond_latents
-        for i, t in enumerate(self.pipe.scheduler.timesteps):
+        for i, t in enumerate(timesteps_tensor):
             latents = self.pipe.scheduler.scale_model_input(latents, t)
             latents = self.denoise(latents, text_embeddings, i, t, guidance_scale)
 
@@ -204,6 +202,7 @@ class AudioReactiveFlow(BaseFlow):
         noise_pred_uncond, noise_pred_cond = pred_decomp[0], torch.cat(
             pred_decomp[1:], dim=0
         ).mean(dim=0, keepdim=True)
+
         noise_pred = noise_pred_uncond + guidance_scale * (
             noise_pred_cond - noise_pred_uncond
         )

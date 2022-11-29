@@ -86,7 +86,7 @@ def run(
     pipe.scheduler = SCHEDULERS.get(scheduler)
 
     generator = torch.Generator(device=device).manual_seed(int(seed))
-    if audio_input:
+    if audio_input is not None:
         if experiment:
             experiment.log_asset(audio_input)
 
@@ -104,7 +104,7 @@ def run(
             use_fixed_latent=use_fixed_latent,
             generator=generator,
         )
-    if video_input:
+    elif video_input is not None:
         if experiment:
             experiment.log_asset(video_input)
 
@@ -115,8 +115,6 @@ def run(
             guidance_scale=guidance_scale,
             strength=strength,
             num_inference_steps=num_inference_steps,
-            height=512,
-            width=512,
             device=device,
             fps=fps,
             use_fixed_latent=use_fixed_latent,
@@ -135,10 +133,10 @@ def run(
             use_fixed_latent=use_fixed_latent,
             generator=generator,
         )
-    max_frames = flow.max_frames
 
+    max_frames = flow.max_frames + 1
     output_frames = []
-    for frame_idx in tqdm(range(max_frames + 1), total=max_frames + 1):
+    for frame_idx in tqdm(range(max_frames), total=max_frames):
         with autocast("cuda"):
             images = flow.create(frame_idx)
 
@@ -167,7 +165,13 @@ def run(
         )
 
         preview_filename = f"{run_path}/output-preview.mp4"
-        save_video(frames=output_frames, filename=preview_filename, fps=fps, quality=35)
+        save_video(
+            frames=output_frames,
+            filename=preview_filename,
+            fps=fps,
+            quality=35,
+            audio_input=audio_input,
+        )
 
     if experiment:
         experiment.log_asset(output_filename)

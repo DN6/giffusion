@@ -2,7 +2,6 @@ import inspect
 
 import numpy as np
 import torch
-from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from utils import parse_key_frames, slerp
 
 from .flow_base import BaseFlow
@@ -68,12 +67,13 @@ class GiffusionFlow(BaseFlow):
             end_latent = torch.randn(
                 (1, self.pipe.unet.in_channels, height // 8, width // 8),
                 device=self.pipe.device,
+                generator=generator,
             )
             start_text_embeddings = self.prompt_to_embedding(start_prompt)
             end_text_embeddings = self.prompt_to_embedding(end_prompt)
 
-            num_frames = end_frame - start_frame
-            interp_schedule = np.linspace(0, 1, num_frames + 1)
+            num_frames = (end_frame - start_frame) + 1
+            interp_schedule = np.linspace(0, 1, num_frames)
             for i, t in enumerate(interp_schedule):
                 latents = slerp(float(t), start_latent, end_latent)
 
@@ -106,10 +106,8 @@ class GiffusionFlow(BaseFlow):
         accepts_offset = "offset" in set(
             inspect.signature(self.pipe.scheduler.set_timesteps).parameters.keys()
         )
-        extra_set_kwargs = {}
-        if accepts_offset:
-            extra_set_kwargs["offset"] = offset
-        self.pipe.scheduler.set_timesteps(num_inference_steps, **extra_set_kwargs)
+        self.pipe.scheduler.set_timesteps(num_inference_steps)
+        self.pipe.scheduler.config.steps_offset = 1
 
         cond_latents = cond_latents * self.pipe.scheduler.init_noise_sigma
 
