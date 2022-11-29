@@ -3,6 +3,7 @@ import re
 import librosa
 import numpy as np
 import torch
+from importlib_metadata import metadata
 from PIL import Image
 from torchvision.io import read_video, write_video
 from torchvision.transforms.functional import pil_to_tensor
@@ -50,10 +51,10 @@ def get_audio_key_frame_information(audio_input, fps, audio_component):
 
 
 def get_video_frame_information(video_input):
-    video_frames, audio, fps = load_video_frames(video_input)
+    video_frames, audio, metadata = load_video_frames(video_input)
     n_frames = len(video_frames)
 
-    return n_frames, fps
+    return n_frames, metadata["video_fps"]
 
 
 def slerp(t, v0, v1, DOT_THRESHOLD=0.9995):

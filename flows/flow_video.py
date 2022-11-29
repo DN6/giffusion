@@ -34,9 +34,9 @@ class VideoInitFlow(BaseFlow):
         self.seed = seed
 
         self.frames, self.audio, metadata = load_video_frames(video_input)
-        _, _, self.width, self.height = self.frames[0].size
+        _, self.width, self.height = self.frames[0].size()
 
-        self.key_frames = parse_key_frames(text_prompts)
+        self.key_frames = self.sync_prompts_to_video(text_prompts, self.frames)
 
         self.max_frames, _ = max(self.key_frames, key=lambda x: x[0])
         self.fps = metadata["video_fps"]
@@ -51,6 +51,40 @@ class VideoInitFlow(BaseFlow):
             self.generator,
             self.use_fixed_latent,
         )
+
+    def sync_prompts_to_video(self, text_prompt_inputs, video_frames):
+        n_frames = len(video_frames)
+        text_key_frames = parse_key_frames(text_prompt_inputs)
+
+        output = {}
+        for start, end in zip(text_key_frames, text_key_frames[1:]):
+            start_key_frame, start_prompt = start
+            end_key_frame, end_prompt = end
+
+            for vf in range(n_frames):
+                if output.get(vf) is not None:
+                    continue
+
+                if vf < end_key_frame:
+                    output[vf] = start_prompt
+
+        max_text_key_frame_idx, max_text_key_frame_prompt = max(
+            text_key_frames, key=lambda x: x[0]
+        )
+
+        for vf in range(n_frames):
+            if vf >= max_text_key_frame_idx:
+                output[vf] = max_text_key_frame_prompt
+
+        min_text_key_frame_idx, min_text_key_frame_prompt = min(
+            text_key_frames, key=lambda x: x[0]
+        )
+        output[min_text_key_frame_idx] = min_text_key_frame_prompt
+
+        output = [[k, v] for k, v in output.items()]
+        output = sorted(output, key=lambda x: x[0])
+
+        return output
 
     @torch.no_grad()
     def get_init_latents_and_text_embeddings(
