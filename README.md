@@ -61,7 +61,9 @@ You can use frames from an existing video as initial images in the diffusion pro
 
 https://user-images.githubusercontent.com/7529846/204550451-5d2162dc-5d6b-4ecd-b1ed-c15cb56bc224.mp4
 
-To use video initialization, head over to the Video Setting tab and upload your file. The `Strength` parameter controls how well your original video content is preserved by the diffusion process. Setting higher values (greater than 0.5) will lead to the source video being ignored.
+To use video initialization, head over to the Video Setting tab and upload your file. Click `Get Key Frame Information` to extract the maximum number of frames present in the video and to update the frame rate in the UI to match the frame rate of the input video.
+
+The `Strength` parameter controls how well your original video content is preserved by the diffusion process. Setting higher values (greater than 0.5) will lead to the source video being ignored.
 
 https://user-images.githubusercontent.com/7529846/204581841-3fa20dd5-7cff-4ec1-aacf-2cb2bfe476b4.mp4
 
