@@ -5,7 +5,8 @@ from datetime import datetime
 import torch
 import typer
 from diffusers import StableDiffusionPipeline
-from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
+                                  PNDMScheduler)
 from torch import autocast
 from torchvision import transforms as T
 from tqdm import tqdm
@@ -66,23 +67,27 @@ def run(
 ):
 
     experiment = start_experiment()
-    run_path = os.path.join(
-        OUTPUT_BASE_PATH, datetime.today().strftime("%Y-%m-%d-%H:%M:%S")
-    )
+
+    run_name = datetime.today().strftime("%Y-%m-%d-%H:%M:%S")
+    run_path = os.path.join(OUTPUT_BASE_PATH, run_name)
     os.makedirs(run_path, exist_ok=True)
 
     if experiment:
-        experiment.log_parameters(
-            {
-                "text_prompt_inputs": text_prompt_inputs,
-                "num_inference_steps": num_inference_steps,
-                "guidance_scale": guidance_scale,
-                "scheduler": scheduler,
-                "seed": seed,
-                "fps": fps,
-                "use_fixed_latent": use_fixed_latent,
-            }
-        )
+        parameters = {
+            "text_prompt_inputs": text_prompt_inputs,
+            "num_inference_steps": num_inference_steps,
+            "guidance_scale": guidance_scale,
+            "scheduler": scheduler,
+            "seed": seed,
+            "fps": fps,
+            "use_fixed_latent": use_fixed_latent,
+            "audio_component": audio_component,
+            "output_format": output_format,
+        }
+        if video_input is not None:
+            parameters.update({"strength": strength})
+        experiment.log_parameters(parameters)
+
     pipe.scheduler = SCHEDULERS.get(scheduler)
 
     generator = torch.Generator(device=device).manual_seed(int(seed))
