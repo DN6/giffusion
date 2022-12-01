@@ -52,6 +52,8 @@ https://user-images.githubusercontent.com/7529846/204550897-70777873-30ca-46a9-a
 
 In order to use audio, head over to the Audio Settings tab and upload your audio file. Then click `Get Key Frame Information`. This will extract key frames from the audio based on the `Audio Component` you have selected. You can extract key frames from the percussive, harmonic or combined audio components of your file.
 
+Additionally, timestamp informtion for these key frames is also extracted to the text input box for reference in case you would like to sync your prompts to a particular time in the audio.
+
 **Note:** The key frames will change based the frame rate that you have set in the UI.
 
 https://user-images.githubusercontent.com/7529846/204581783-7fa9ad83-baf2-4293-99e1-9315d6b557c9.mp4
