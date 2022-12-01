@@ -63,7 +63,7 @@ https://user-images.githubusercontent.com/7529846/204550451-5d2162dc-5d6b-4ecd-b
 
 To use video initialization, head over to the Video Setting tab and upload your file. Click `Get Key Frame Information` to extract the maximum number of frames present in the video and to update the frame rate in the UI to match the frame rate of the input video.
 
-The `Strength` parameter controls how well your original video content is preserved by the diffusion process. Setting higher values (greater than 0.5) will lead to the source video being ignored.
+The `Strength` parameter controls how well your original video content is preserved by the diffusion process. Setting higher values (greater than 0.5) will lead to more of the source content being ignored.
 
 https://user-images.githubusercontent.com/7529846/204581841-3fa20dd5-7cff-4ec1-aacf-2cb2bfe476b4.mp4
 
@@ -72,3 +72,11 @@ https://user-images.githubusercontent.com/7529846/204581841-3fa20dd5-7cff-4ec1-a
 GIFfusion also support saving prompts, generated GIFs/Videos, images, and settings to [Comet](https://www.comet.com/site/) so you can keep track of your generative experiments.
 
 [Check out an example project here with some of my GIFs!](https://www.comet.com/team-comet-ml/giffusion?shareable=Jf4go5RcGqryr6wq1uBudgVVS)
+
+### Additional Resources
+
+1. Prompt format is based on the work from [Deforum Art](https://deforum.github.io/)
+2. Inspiration Button uses the [Midjourney Prompt Generator](https://huggingface.co/spaces/doevent/prompt-generator) Space by DoEvent 
+3. [Stable Diffusion Videos for Audio Reactivity](https://github.com/nateraw/stable-diffusion-videos)
+4. [Comet ML Project with some of the things made with Giffusion](https://www.comet.com/team-comet-ml/giffusion/view/CzxqbNrydKqHCaYhNEnbyrpnz/panels?utm_source=tds&utm_medium=social&utm_campaign=stable_diffusion)
+5. [Gradio Docs](https://gradio.app/docs/): The UI for this project is built with Gradio.
