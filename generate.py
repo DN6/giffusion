@@ -5,8 +5,7 @@ from datetime import datetime
 import torch
 import typer
 from diffusers import StableDiffusionPipeline
-from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
-                                  PNDMScheduler)
+from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from torch import autocast
 from torchvision import transforms as T
 from tqdm import tqdm
@@ -56,6 +55,7 @@ def run(
     num_inference_steps=50,
     guidance_scale=7.5,
     strength=1.0,
+    batch_size=1,
     seed=42,
     fps=24,
     scheduler="pndms",
@@ -108,6 +108,7 @@ def run(
             fps=fps,
             use_fixed_latent=use_fixed_latent,
             generator=generator,
+            batch_size=batch_size,
         )
     elif video_input is not None:
         if experiment:
@@ -124,6 +125,7 @@ def run(
             fps=fps,
             use_fixed_latent=use_fixed_latent,
             generator=generator,
+            batch_size=batch_size,
         )
 
     else:
@@ -137,20 +139,24 @@ def run(
             device=device,
             use_fixed_latent=use_fixed_latent,
             generator=generator,
+            batch_size=batch_size,
         )
 
-    max_frames = flow.max_frames + 1
+    max_frames = flow.max_frames
     output_frames = []
-    for frame_idx in tqdm(range(max_frames), total=max_frames):
-        with autocast("cuda"):
-            images = flow.create(frame_idx)
 
-        img_save_path = f"{run_path}/{frame_idx:04d}.png"
-        images[0].save(img_save_path)
-        output_frames.append(img_save_path)
+    image_generator = flow.create()
+    frame_idx = 0
 
-        if experiment:
-            experiment.log_image(img_save_path, image_name="frame", step=frame_idx)
+    for images in tqdm(image_generator, total=max_frames // flow.batch_size):
+        for image in images:
+            img_save_path = f"{run_path}/{frame_idx:04d}.png"
+            image.save(img_save_path)
+            output_frames.append(img_save_path)
+
+            if experiment:
+                experiment.log_image(img_save_path, image_name="frame", step=frame_idx)
+            frame_idx += 1
 
     if output_format == "gif":
         output_filename = f"{run_path}/output.gif"

@@ -1,4 +1,5 @@
 import inspect
+import random
 
 import numpy as np
 import torch
@@ -37,8 +38,8 @@ class VideoInitFlow(BaseFlow):
         _, self.width, self.height = self.frames[0].size()
 
         self.key_frames = self.sync_prompts_to_video(text_prompts, self.frames)
-
-        self.max_frames, _ = max(self.key_frames, key=lambda x: x[0])
+        last_frame, _ = max(self.key_frames, key=lambda x: x[0])
+        self.max_frames = last_frame + 1
         self.fps = metadata["video_fps"]
         (
             self.init_latents,
@@ -101,12 +102,12 @@ class VideoInitFlow(BaseFlow):
 
             start_image = self.preprocess(frames[start_frame], (height, width))
             start_latent = self.encode_latents(
-                start_image.unsqueeze(0), generator=generator
+                start_image.unsqueeze(0), generator=generator.manual_seed(self.seed)
             )
 
             end_image = self.preprocess(frames[end_frame], (height, width))
             end_latent = self.encode_latents(
-                end_image.unsqueeze(0), generator=generator
+                end_image.unsqueeze(0), generator=generator.manual_seed(self.seed)
             )
 
             start_text_embeddings = self.prompt_to_embedding(start_prompt)
@@ -167,18 +168,6 @@ class VideoInitFlow(BaseFlow):
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
-        max_length = cond_embeddings.shape[1]
-        uncond_input = self.pipe.tokenizer(
-            [""] * batch_size,
-            padding="max_length",
-            max_length=max_length,
-            return_tensors="pt",
-        )
-        uncond_embeddings = self.pipe.text_encoder(
-            uncond_input.input_ids.to(self.device)
-        )[0]
-        text_embeddings = torch.cat([uncond_embeddings, cond_embeddings])
-
         t_start = max(num_inference_steps - init_timestep + offset, 0)
         diffuse_timesteps = self.pipe.scheduler.timesteps[t_start:].to(self.device)
 
@@ -186,50 +175,42 @@ class VideoInitFlow(BaseFlow):
         for i, t in enumerate(diffuse_timesteps):
             latents = self.pipe.scheduler.scale_model_input(latents, t)
             latents = self.denoise(
-                latents, text_embeddings, i, t, guidance_scale, extra_step_kwargs
+                latents, cond_embeddings, i, t, guidance_scale, extra_step_kwargs
             )
 
         return latents
 
-    @torch.no_grad()
-    def denoise(
-        self, latents, text_embeddings, i, t, guidance_scale, extra_step_kwargs
-    ):
-        latent_model_input = torch.cat([latents] * text_embeddings.shape[0])
+    def batch_generator(self, frames, batch_size):
+        text_batch = []
+        latent_batch = []
 
-        noise_pred = self.pipe.unet(
-            latent_model_input, t, encoder_hidden_states=text_embeddings
-        )["sample"]
+        for frame_idx in frames:
+            text_batch.append(self.text_embeddings[frame_idx])
+            latent_batch.append(self.init_latents[frame_idx])
 
-        pred_decomp = noise_pred.chunk(text_embeddings.shape[0])
-        noise_pred_uncond, noise_pred_cond = pred_decomp[0], torch.cat(
-            pred_decomp[1:], dim=0
-        ).mean(dim=0, keepdim=True)
-        noise_pred = noise_pred_uncond + guidance_scale * (
-            noise_pred_cond - noise_pred_uncond
-        )
-        latents = self.pipe.scheduler.step(noise_pred, t, latents, **extra_step_kwargs)[
-            "prev_sample"
-        ]
+            if len(text_batch) % batch_size == 0:
+                text_batch = torch.cat(text_batch, dim=0)
+                latent_batch = torch.cat(latent_batch, dim=0)
 
-        return latents
+                yield text_batch, latent_batch
 
-    def create(self, frame_idx):
-        init_latents, text_embeddings = (
-            self.init_latents[frame_idx],
-            self.text_embeddings[frame_idx],
-        )
-        latents = self.diffuse(
-            text_embeddings,
-            init_latents,
-            self.num_inference_steps,
-            self.guidance_scale,
-            strength=self.strength,
-            generator=self.generator,
-        )
-        image_tensors = self.decode_latents(latents)
+                text_batch = []
+                latent_batch = []
 
-        image_array = self.postprocess(image_tensors)
-        images = self.numpy_to_pil(image_array)
+    def create(self, frames=None):
+        for text_embeddings, init_latents in self.batch_generator(
+            frames if frames else [i for i in range(self.max_frames)], self.batch_size
+        ):
+            with torch.autocast("cuda"):
+                latents = self.diffuse(
+                    text_embeddings,
+                    init_latents,
+                    self.num_inference_steps,
+                    self.guidance_scale,
+                )
+                image_tensors = self.decode_latents(latents)
 
-        return images
+            image_array = self.postprocess(image_tensors)
+            images = self.numpy_to_pil(image_array)
+
+            yield images
