@@ -114,7 +114,9 @@ with demo:
                             value="pndms",
                             label="Scheduler",
                         )
-                        batch_size = gr.Slider(1, 16, 1, value=1, label="Batch Size")
+                        batch_size = gr.Slider(
+                            1, 16, step=1, value=1, label="Batch Size"
+                        )
 
                     with gr.TabItem("Audio Input Settings"):
                         audio_input = gr.Audio(label="Audio Input", type="filepath")
