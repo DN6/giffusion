@@ -101,7 +101,7 @@ class BaseFlow:
             uncond_input.input_ids.to(self.device)
         )[0]
         text_embeddings = torch.cat([uncond_embeddings, text_embeddings])
-        latent_model_input = torch.cat([latents] * 2)
+        latent_model_input = torch.cat([latent_model_input] * 2)
 
         noise_pred = self.pipe.unet(
             latent_model_input, t, encoder_hidden_states=text_embeddings
