@@ -174,9 +174,7 @@ class VideoInitFlow(BaseFlow):
         latents = cond_latents
         for i, t in enumerate(diffuse_timesteps):
             latents = self.pipe.scheduler.scale_model_input(latents, t)
-            latents = self.denoise(
-                latents, cond_embeddings, i, t, guidance_scale, extra_step_kwargs
-            )
+            latents = self.denoise(latents, cond_embeddings, i, t, guidance_scale)
 
         return latents
 
@@ -207,6 +205,7 @@ class VideoInitFlow(BaseFlow):
                     init_latents,
                     self.num_inference_steps,
                     self.guidance_scale,
+                    strength=self.strength,
                 )
                 image_tensors = self.decode_latents(latents)
 

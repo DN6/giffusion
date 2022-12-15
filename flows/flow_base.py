@@ -40,14 +40,6 @@ class BaseFlow:
         return pil_images
 
     @torch.no_grad()
-    def denoise(self):
-        raise NotImplementedError
-
-    @torch.no_grad()
-    def diffuse(self):
-        raise NotImplementedError
-
-    @torch.no_grad()
     def decode_latents(self, latents):
         latents = 1 / 0.18215 * latents
         sample = self.pipe.vae.decode(latents).sample

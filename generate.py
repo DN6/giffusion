@@ -83,6 +83,7 @@ def run(
             "use_fixed_latent": use_fixed_latent,
             "audio_component": audio_component,
             "output_format": output_format,
+            "model_name": PRETRAINED_MODEL_NAME,
         }
         if video_input is not None:
             parameters.update({"strength": strength})
