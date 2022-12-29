@@ -138,9 +138,7 @@ class VideoInitFlow(BaseFlow):
         strength=1.0,
         offset=1,
         eta=0.0,
-        generator=None,
     ):
-
         batch_size = self.batch_size
 
         self.pipe.scheduler.set_timesteps(num_inference_steps)
