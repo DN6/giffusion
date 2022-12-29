@@ -155,7 +155,7 @@ class VideoInitFlow(BaseFlow):
         # add noise to latents using the timesteps
         noise = torch.randn(
             cond_latents.shape,
-            generator=generator,
+            generator=self.generator.manual_seed(self.seed),
             device=self.device,
             dtype=cond_embeddings.dtype,
         )
