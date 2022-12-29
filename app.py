@@ -34,6 +34,7 @@ def predict(
     guidance_scale,
     strength,
     seed,
+    batch_size,
     fps,
     scheduler,
     use_fixed_latent,
@@ -48,6 +49,7 @@ def predict(
         guidance_scale=guidance_scale,
         strength=strength,
         seed=seed,
+        batch_size=batch_size,
         fps=fps,
         scheduler=scheduler,
         use_fixed_latent=use_fixed_latent,
@@ -112,6 +114,10 @@ with demo:
                             value="pndms",
                             label="Scheduler",
                         )
+                        batch_size = gr.Slider(
+                            1, 16, step=1, value=1, label="Batch Size"
+                        )
+
                     with gr.TabItem("Audio Input Settings"):
                         audio_input = gr.Audio(label="Audio Input", type="filepath")
                         audio_info_btn = gr.Button(value="Get Key Frame Information")
@@ -159,6 +165,7 @@ with demo:
             guidance_scale,
             strength,
             seed,
+            batch_size,
             fps,
             scheduler,
             use_fixed_latent,

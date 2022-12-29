@@ -10,12 +10,18 @@ Giffusion is a Web UI for generating GIFs and Videos using Stable Diffusion.
 
 Giffusion follows a prompt syntax similar to the one used in [Deforum Art's Stable Diffusion Notebook](https://deforum.github.io/)
 
-Provide prompts for specific key frames in your GIF or Video, and Giffusion will interpolate between them to fill in the rest. For example, the prompt below will generate images for frame 0 and 60. The frames in between will created by interpolating between the prompts.
-
 ```
 0: a picture of a corgi
 60: a picture of a lion
 ```
+
+The first part of the prompt indicates a key frame number, while the text after the colon is the prompt used by the model to generate the image.
+
+In the example above, we're asking the model to generate a picture of a Corgi at frame 0 and a picture of a lion at frame 60. So what about all the images in between these two key frames? How do they get generated?
+
+You might recall that Diffusion Models work by turning noise into images. Stable Diffusion turns a noise tensor into a latent embedding in order to save time and memory when running the diffusion process. This latent embedding is fed into a decoder to produce the image.
+
+The inputs to our model are a noise tensor and text embedding tensor. Using our key frames as our start and end points, we can produce images in between these frames by interpolating these tensors.
 
 ![output-corgi-final](https://user-images.githubusercontent.com/7529846/204506200-49f91bd1-396f-4cf1-927c-c91b885f5c4a.gif)
 
@@ -66,7 +72,7 @@ https://user-images.githubusercontent.com/7529846/204550451-5d2162dc-5d6b-4ecd-b
 
 To use video initialization, head over to the Video Setting tab and upload your file. Click `Get Key Frame Information` to extract the maximum number of frames present in the video and to update the frame rate in the UI to match the frame rate of the input video.
 
-The `Strength` parameter controls how well your original video content is preserved by the diffusion process. Setting higher values (greater than 0.5) will lead to more of the source content being ignored.
+The `Strength` parameter controls how well your original video content is preserved by the diffusion process. Setting higher values (greater than 0.5) will lead to source image semantics being ignored.
 
 https://user-images.githubusercontent.com/7529846/204581841-3fa20dd5-7cff-4ec1-aacf-2cb2bfe476b4.mp4
 
@@ -80,6 +86,6 @@ GIFfusion also support saving prompts, generated GIFs/Videos, images, and settin
 
 1. Prompt format is based on the work from [Deforum Art](https://deforum.github.io/)
 2. Inspiration Button uses the [Midjourney Prompt Generator](https://huggingface.co/spaces/doevent/prompt-generator) Space by DoEvent 
-3. [Stable Diffusion Videos for Audio Reactivity](https://github.com/nateraw/stable-diffusion-videos)
+3. [Stable Diffusion Videos with Audio Reactivity](https://github.com/nateraw/stable-diffusion-videos)
 4. [Comet ML Project with some of the things made with Giffusion](https://www.comet.com/team-comet-ml/giffusion/view/CzxqbNrydKqHCaYhNEnbyrpnz/panels?utm_source=tds&utm_medium=social&utm_campaign=stable_diffusion)
 5. [Gradio Docs](https://gradio.app/docs/): The UI for this project is built with Gradio.

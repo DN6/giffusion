@@ -1,3 +1,5 @@
+import inspect
+
 import torch
 import torchvision.transforms as T
 from PIL import Image
@@ -38,14 +40,6 @@ class BaseFlow:
         return pil_images
 
     @torch.no_grad()
-    def denoise(self):
-        raise NotImplementedError
-
-    @torch.no_grad()
-    def diffuse(self):
-        raise NotImplementedError
-
-    @torch.no_grad()
     def decode_latents(self, latents):
         latents = 1 / 0.18215 * latents
         sample = self.pipe.vae.decode(latents).sample
@@ -74,6 +68,101 @@ class BaseFlow:
         text_embeddings = self.pipe.text_encoder(text_inputs)[0]
 
         return text_embeddings
+
+    @torch.no_grad()
+    def denoise(self, latents, text_embeddings, i, t, guidance_scale):
+        accepts_eta = "eta" in set(
+            inspect.signature(self.pipe.scheduler.step).parameters.keys()
+        )
+        extra_step_kwargs = {}
+        if accepts_eta:
+            extra_step_kwargs["eta"] = 0.0
+
+        latent_model_input = torch.cat(
+            list(
+                map(
+                    lambda latent, text_embedding: torch.cat(
+                        [latent] * text_embedding.shape[0]
+                    ),
+                    latents.chunk(self.batch_size),
+                    text_embeddings.chunk(self.batch_size),
+                )
+            )
+        )
+
+        max_length = text_embeddings.shape[1]
+        uncond_input = self.pipe.tokenizer(
+            [""] * latent_model_input.shape[0],
+            padding="max_length",
+            max_length=max_length,
+            return_tensors="pt",
+        )
+        uncond_embeddings = self.pipe.text_encoder(
+            uncond_input.input_ids.to(self.device)
+        )[0]
+        text_embeddings = torch.cat([uncond_embeddings, text_embeddings])
+        latent_model_input = torch.cat([latent_model_input] * 2)
+
+        noise_pred = self.pipe.unet(
+            latent_model_input, t, encoder_hidden_states=text_embeddings
+        )["sample"]
+
+        noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
+        noise_pred_cond = torch.cat(
+            list(
+                map(
+                    lambda x: x.mean(dim=0, keepdim=True),
+                    noise_pred_cond.chunk(self.batch_size),
+                )
+            )
+        )
+        noise_pred_uncond = torch.cat(
+            list(
+                map(
+                    lambda x: x.mean(dim=0, keepdim=True),
+                    noise_pred_uncond.chunk(self.batch_size),
+                )
+            )
+        )
+
+        noise_pred = noise_pred_uncond + guidance_scale * (
+            noise_pred_cond - noise_pred_uncond
+        )
+        latents = self.pipe.scheduler.step(noise_pred, t, latents, **extra_step_kwargs)[
+            "prev_sample"
+        ]
+
+        return latents
+
+    @torch.no_grad()
+    def diffuse(
+        self,
+        cond_embeddings,
+        cond_latents,
+        num_inference_steps=50,
+        guidance_scale=7.5,
+        offset=1,
+        eta=0.0,
+    ):
+
+        self.pipe.scheduler.set_timesteps(num_inference_steps)
+        self.pipe.scheduler.config.steps_offset = 1
+
+        cond_latents = cond_latents * self.pipe.scheduler.init_noise_sigma
+
+        accepts_eta = "eta" in set(
+            inspect.signature(self.pipe.scheduler.step).parameters.keys()
+        )
+        extra_step_kwargs = {}
+        if accepts_eta:
+            extra_step_kwargs["eta"] = eta
+
+        latents = cond_latents
+        for i, t in enumerate(self.pipe.scheduler.timesteps):
+            latents = self.pipe.scheduler.scale_model_input(latents, t)
+            latents = self.denoise(latents, cond_embeddings, i, t, guidance_scale)
+
+        return latents
 
     def pad_embedding(self, start, end):
         if start.shape == end.shape:
