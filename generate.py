@@ -91,7 +91,6 @@ def run(
 
     pipe.scheduler = SCHEDULERS.get(scheduler)
 
-    generator = torch.Generator(device=device).manual_seed(int(seed))
     if audio_input is not None:
         if experiment:
             experiment.log_asset(audio_input)
@@ -108,7 +107,7 @@ def run(
             device=device,
             fps=fps,
             use_fixed_latent=use_fixed_latent,
-            generator=generator,
+            seed=seed,
             batch_size=batch_size,
         )
     elif video_input is not None:
@@ -127,6 +126,7 @@ def run(
             use_fixed_latent=use_fixed_latent,
             generator=generator,
             batch_size=batch_size,
+            seed=seed,
         )
 
     else:
@@ -141,6 +141,7 @@ def run(
             use_fixed_latent=use_fixed_latent,
             generator=generator,
             batch_size=batch_size,
+            seed=seed,
         )
 
     max_frames = flow.max_frames
