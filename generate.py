@@ -124,7 +124,6 @@ def run(
             device=device,
             fps=fps,
             use_fixed_latent=use_fixed_latent,
-            generator=generator,
             batch_size=batch_size,
             seed=seed,
         )
@@ -139,7 +138,6 @@ def run(
             width=512,
             device=device,
             use_fixed_latent=use_fixed_latent,
-            generator=generator,
             batch_size=batch_size,
             seed=seed,
         )
