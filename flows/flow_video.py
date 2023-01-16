@@ -22,7 +22,6 @@ class VideoInitFlow(BaseFlow):
         seed=42,
         batch_size=1,
         fps=10,
-        generator=None,
     ):
         super().__init__(pipe, device, batch_size)
 
@@ -31,8 +30,8 @@ class VideoInitFlow(BaseFlow):
         self.guidance_scale = guidance_scale
         self.strength = strength
         self.num_inference_steps = num_inference_steps
-        self.generator = generator
         self.seed = seed
+        self.generator = torch.Generator(device)
 
         self.frames, self.audio, metadata = load_video_frames(video_input)
         _, self.width, self.height = self.frames[0].size()

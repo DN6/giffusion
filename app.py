@@ -48,7 +48,7 @@ def predict(
         num_inference_steps=num_iteration_steps,
         guidance_scale=guidance_scale,
         strength=strength,
-        seed=seed,
+        seed=int(seed),
         batch_size=batch_size,
         fps=fps,
         scheduler=scheduler,

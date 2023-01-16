@@ -25,7 +25,6 @@ class AudioReactiveFlow(BaseFlow):
         seed=42,
         batch_size=1,
         fps=10,
-        generator=None,
     ):
         super().__init__(pipe, device, batch_size)
 
@@ -34,8 +33,8 @@ class AudioReactiveFlow(BaseFlow):
         self.use_fixed_latent = use_fixed_latent
         self.guidance_scale = guidance_scale
         self.num_inference_steps = num_inference_steps
-        self.generator = generator
         self.seed = seed
+        self.generator = torch.Generator(device)
 
         self.key_frames = parse_key_frames(text_prompts)
         random.seed(self.seed)
