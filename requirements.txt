@@ -7,3 +7,4 @@ ftfy
 gradio
 comet_ml
 imageio-ffmpeg
+xformers

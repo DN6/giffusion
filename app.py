@@ -1,9 +1,25 @@
+import importlib
+
 import gradio as gr
+import torch
 
 from generate import run
 from utils import get_audio_key_frame_information, get_video_frame_information
 
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
+
+
+def load_pipeline(model_name, pipeline_name):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    _pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
+    pipe = _pipe_cls.from_pretrained(
+        model_name, use_auth_token=True, torch_dtype=torch.float16
+    )
+    pipe.enable_xformers_memory_efficient_attention()
+    pipe = pipe.to(device)
+
+    return pipe
 
 
 def generate_prompt(fps, topics=""):
@@ -29,6 +45,7 @@ def _get_video_frame_information(video_input):
 
 
 def predict(
+    pipe,
     text_prompt_input,
     num_iteration_steps,
     guidance_scale,
@@ -40,10 +57,12 @@ def predict(
     use_fixed_latent,
     audio_input,
     audio_component,
+    image_input,
     video_input,
     output_format,
 ):
     output = run(
+        pipe=pipe,
         text_prompt_inputs=text_prompt_input,
         num_inference_steps=num_iteration_steps,
         guidance_scale=guidance_scale,
@@ -55,6 +74,7 @@ def predict(
         use_fixed_latent=use_fixed_latent,
         audio_input=audio_input,
         audio_component=audio_component,
+        image_input=image_input,
         video_input=video_input,
         output_format=output_format,
     )
@@ -62,12 +82,22 @@ def predict(
     return output
 
 
-demo = gr.Blocks(css="css/styles.css")
+demo = gr.Blocks()
 
 with demo:
     gr.Markdown("# GIFfusion 💥")
     with gr.Row():
         with gr.Column():
+            with gr.Row():
+                model_name = gr.Textbox(
+                    label="Model Name", value="runwayml/stable-diffusion-v1-5"
+                )
+                pipeline_name = gr.Textbox(
+                    label="Model Name", value="StableDiffusionPipeline"
+                )
+                load_pipeline_btn = gr.Button(label="Load Pipeline")
+                pipe = gr.State()
+
             with gr.Row():
                 output_format = gr.Radio(
                     ["gif", "mp4"], value="mp4", label="Output Format"
@@ -81,8 +111,10 @@ with demo:
                     label="Text Prompts",
                     interactive=True,
                 )
+
             with gr.Row():
                 topics = gr.Textbox(lines=1, value="", label="Inspiration Topics")
+
             with gr.Row():
                 generate = gr.Button(
                     value="Give me some inspiration!",
@@ -109,6 +141,9 @@ with demo:
                             value=7.5,
                             label="Classifier Free Guidance Scale",
                         )
+                        strength = gr.Slider(
+                            0, 1.0, step=0.1, value=0.5, label="Image Strength"
+                        )
                         scheduler = gr.Dropdown(
                             ["klms", "ddim", "pndms"],
                             value="pndms",
@@ -128,11 +163,13 @@ with demo:
                         )
 
                     with gr.TabItem("Video Input Settings"):
-                        video_input = gr.Video(label="Video Input")
-                        strength = gr.Slider(
-                            0, 1.0, step=0.1, value=0.5, label="Image Strength"
-                        )
-                        video_info_btn = gr.Button(value="Get Key Frame Infomation")
+                        with gr.Row():
+                            video_input = gr.Video(label="Video Input")
+                            video_info_btn = gr.Button(value="Get Key Frame Infomation")
+
+                    with gr.TabItem("Image Input Settings"):
+                        with gr.Row():
+                            image_input = gr.Image(label="Initial Image", type="pil")
 
             with gr.Row():
                 submit = gr.Button(
@@ -145,7 +182,13 @@ with demo:
         with gr.Column(elem_id="output"):
             output = gr.Video(label="Model Output", elem_id="output")
 
-    generate.click(generate_prompt, inputs=[fps, topics], outputs=text_prompt_input)
+    load_pipeline_btn.click(load_pipeline, [model_name, pipeline_name], [pipe])
+
+    generate.click(
+        generate_prompt,
+        inputs=[text_prompt_input, fps, topics],
+        outputs=text_prompt_input,
+    )
     audio_info_btn.click(
         _get_audio_key_frame_information,
         inputs=[audio_input, fps, audio_component],
@@ -171,6 +214,7 @@ with demo:
             use_fixed_latent,
             audio_input,
             audio_component,
+            image_input,
             video_input,
             output_format,
         ],

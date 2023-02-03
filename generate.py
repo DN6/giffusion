@@ -2,12 +2,8 @@ import logging
 import os
 from datetime import datetime
 
-import torch
 import typer
-from diffusers import StableDiffusionPipeline
 from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
-from torch import autocast
-from torchvision import transforms as T
 from tqdm import tqdm
 
 from comet import start_experiment
@@ -15,18 +11,6 @@ from flows import AudioReactiveFlow, GiffusionFlow, VideoInitFlow
 from utils import save_gif, save_video
 
 logger = logging.getLogger(__name__)
-
-
-PRETRAINED_MODEL_NAME = os.getenv(
-    "PRETRAINED_MODEL_NAME", "CompVis/stable-diffusion-v1-4"
-)
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-pipe = StableDiffusionPipeline.from_pretrained(
-    PRETRAINED_MODEL_NAME, use_auth_token=True
-)
-pipe.enable_attention_slicing()
-pipe.to(device)
 
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "../generated")
 
@@ -51,6 +35,7 @@ SCHEDULERS = dict(
 
 
 def run(
+    pipe,
     text_prompt_inputs,
     num_inference_steps=50,
     guidance_scale=7.5,
@@ -62,15 +47,22 @@ def run(
     use_fixed_latent=False,
     audio_input=None,
     audio_component="both",
+    image_input=None,
     video_input=None,
     output_format="gif",
 ):
+    if pipe is None:
+        raise ValueError(
+            "Pipline object has not been created. Please load a pipline before submitting"
+        )
 
     experiment = start_experiment()
 
     run_name = datetime.today().strftime("%Y-%m-%d-%H:%M:%S")
     run_path = os.path.join(OUTPUT_BASE_PATH, run_name)
     os.makedirs(run_path, exist_ok=True)
+
+    device = pipe.device
 
     if experiment:
         parameters = {
@@ -83,7 +75,6 @@ def run(
             "use_fixed_latent": use_fixed_latent,
             "audio_component": audio_component,
             "output_format": output_format,
-            "model_name": PRETRAINED_MODEL_NAME,
         }
         if video_input is not None:
             parameters.update({"strength": strength})
@@ -109,6 +100,7 @@ def run(
             use_fixed_latent=use_fixed_latent,
             seed=seed,
             batch_size=batch_size,
+            init_image=image_input,
         )
     elif video_input is not None:
         if experiment:
@@ -140,6 +132,7 @@ def run(
             use_fixed_latent=use_fixed_latent,
             batch_size=batch_size,
             seed=seed,
+            init_image=image_input,
         )
 
     max_frames = flow.max_frames

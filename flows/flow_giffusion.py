@@ -20,10 +20,12 @@ class GiffusionFlow(BaseFlow):
         use_fixed_latent,
         device,
         seed=42,
-        batch_size=2,
-        fps=10,
+        batch_size=1,
+        init_image=None,
     ):
         super().__init__(pipe, device, batch_size)
+
+        self.pipe_signature = set(inspect.signature(self.pipe).parameters.keys())
 
         self.text_prompts = text_prompts
         self.width, self.height = width, height
@@ -31,15 +33,18 @@ class GiffusionFlow(BaseFlow):
         self.guidance_scale = guidance_scale
         self.num_inference_steps = num_inference_steps
         self.seed = seed
-        self.generator = torch.Generator(device)
+
+        self.device = device
+        self.generator = torch.Generator(self.device)
 
         self.key_frames = parse_key_frames(text_prompts)
         random.seed(self.seed)
         self.seed_schedule = {
-            kf: random.randint(0, 123456789) for kf, _ in self.key_frames
+            kf: random.randint(0, 18446744073709551615) for kf, _ in self.key_frames
         }
         last_frame, _ = max(self.key_frames, key=lambda x: x[0])
         self.max_frames = last_frame + 1
+        self.init_image = init_image
 
         (
             self.init_latents,
@@ -59,7 +64,12 @@ class GiffusionFlow(BaseFlow):
         text_output = {}
         latent_output = {}
         start_latent = torch.randn(
-            (1, self.pipe.unet.in_channels, height // 8, width // 8),
+            (
+                1,
+                self.pipe.unet.in_channels,
+                height // self.pipe.vae_scale_factor,
+                width // self.pipe.vae_scale_factor,
+            ),
             device=self.pipe.device,
             generator=generator.manual_seed(self.seed),
         )
@@ -74,7 +84,12 @@ class GiffusionFlow(BaseFlow):
                 start_latent
                 if use_fixed_latent
                 else torch.randn(
-                    (1, self.pipe.unet.in_channels, height // 8, width // 8),
+                    (
+                        1,
+                        self.pipe.unet.in_channels,
+                        height // self.pipe.vae_scale_factor,
+                        width // self.pipe.vae_scale_factor,
+                    ),
                     device=self.pipe.device,
                     generator=generator.manual_seed(self.seed_schedule[end_frame]),
                 )
@@ -102,6 +117,7 @@ class GiffusionFlow(BaseFlow):
     def batch_generator(self, frames, batch_size):
         text_batch = []
         latent_batch = []
+        generator_batch = []
 
         for frame_idx in frames:
             text_batch.append(self.text_embeddings[frame_idx])
@@ -110,26 +126,55 @@ class GiffusionFlow(BaseFlow):
             if len(text_batch) % batch_size == 0:
                 text_batch = torch.cat(text_batch, dim=0)
                 latent_batch = torch.cat(latent_batch, dim=0)
+                generator_batch.append(
+                    torch.Generator(self.device).manual_seed(
+                        self.seed_schedule[frame_idx]
+                    )
+                )
 
-                yield text_batch, latent_batch
+                yield {
+                    "text_embeddings": text_batch,
+                    "init_latents": latent_batch,
+                    "generators": generator_batch,
+                }
 
                 text_batch = []
                 latent_batch = []
+                generator_batch = []
 
     def create(self, frames=None):
-        for text_embeddings, init_latents in self.batch_generator(
+        for batch in self.batch_generator(
             frames if frames else [i for i in range(self.max_frames)], self.batch_size
         ):
-            with torch.autocast("cuda"):
-                latents = self.diffuse(
-                    text_embeddings,
-                    init_latents,
-                    self.num_inference_steps,
-                    self.guidance_scale,
-                )
-                image_tensors = self.decode_latents(latents)
 
-            image_array = self.postprocess(image_tensors)
-            images = self.numpy_to_pil(image_array)
+            prompt_embeds = batch["text_embeddings"]
+            latents = batch["init_latents"]
+            generators = batch["generators"]
+
+            pipe_kwargs = dict(
+                height=self.height,
+                width=self.width,
+                num_inference_steps=self.num_inference_steps,
+                guidance_scale=self.guidance_scale,
+            )
+
+            if "image" in self.pipe_signature:
+                if self.init_image is not None:
+                    pipe_kwargs.update(
+                        {
+                            "image": self.init_image,
+                            "strength": self.strength,
+                            "generator": generators,
+                        }
+                    )
+
+            if "latents" in self.pipe_signature:
+                pipe_kwargs.update({"latents": latents})
+
+            if "prompt_embeds" in self.pipe_signature:
+                pipe_kwargs.update({"prompt_embeds": prompt_embeds})
+
+            with torch.autocast("cuda"):
+                images = self.pipe(**pipe_kwargs)
 
             yield images

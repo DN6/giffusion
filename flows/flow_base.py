@@ -41,10 +41,7 @@ class BaseFlow:
 
     @torch.no_grad()
     def decode_latents(self, latents):
-        latents = 1 / 0.18215 * latents
-        sample = self.pipe.vae.decode(latents).sample
-
-        return sample
+        return self.pipe.decode_latents(latents)
 
     @torch.no_grad()
     def encode_latents(self, x, generator=None):
