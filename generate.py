@@ -3,7 +3,8 @@ import os
 from datetime import datetime
 
 import typer
-from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
+                                  PNDMScheduler)
 from tqdm import tqdm
 
 from comet import start_experiment
@@ -141,7 +142,8 @@ def run(
     image_generator = flow.create()
     frame_idx = 0
 
-    for images in tqdm(image_generator, total=max_frames // flow.batch_size):
+    for output in tqdm(image_generator, total=max_frames // flow.batch_size):
+        images = output.images
         for image in images:
             img_save_path = f"{run_path}/{frame_idx:04d}.png"
             image.save(img_save_path)
