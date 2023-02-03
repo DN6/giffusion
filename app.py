@@ -10,16 +10,20 @@ prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
 
 def load_pipeline(model_name, pipeline_name):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    try:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    _pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
-    pipe = _pipe_cls.from_pretrained(
-        model_name, use_auth_token=True, torch_dtype=torch.float16
-    )
-    pipe.enable_xformers_memory_efficient_attention()
-    pipe = pipe.to(device)
+        _pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
+        pipe = _pipe_cls.from_pretrained(
+            model_name, use_auth_token=True, torch_dtype=torch.float16
+        )
+        pipe.enable_xformers_memory_efficient_attention()
+        pipe = pipe.to(device)
 
-    return pipe
+        return pipe, "Successfully loaded Pipeline"
+
+    except Exception:
+        return None, "Failed to Load Pipeline"
 
 
 def generate_prompt(fps, topics=""):
@@ -89,13 +93,19 @@ with demo:
     with gr.Row():
         with gr.Column():
             with gr.Row():
-                model_name = gr.Textbox(
-                    label="Model Name", value="runwayml/stable-diffusion-v1-5"
-                )
-                pipeline_name = gr.Textbox(
-                    label="Model Name", value="StableDiffusionPipeline"
-                )
-                load_pipeline_btn = gr.Button(label="Load Pipeline")
+                with gr.Column():
+                    model_name = gr.Textbox(
+                        label="Model Name", value="runwayml/stable-diffusion-v1-5"
+                    )
+                    pipeline_name = gr.Textbox(
+                        label="Model Name", value="StableDiffusionPipeline"
+                    )
+                with gr.Column():
+                    with gr.Row():
+                        load_pipeline_btn = gr.Button(value="Load Pipeline")
+                    with gr.Row():
+                        load_message = gr.Markdown()
+
                 pipe = gr.State()
 
             with gr.Row():
@@ -182,7 +192,9 @@ with demo:
         with gr.Column(elem_id="output"):
             output = gr.Video(label="Model Output", elem_id="output")
 
-    load_pipeline_btn.click(load_pipeline, [model_name, pipeline_name], [pipe])
+    load_pipeline_btn.click(
+        load_pipeline, [model_name, pipeline_name], [pipe, load_message]
+    )
 
     generate.click(
         generate_prompt,
@@ -203,6 +215,7 @@ with demo:
     submit.click(
         fn=predict,
         inputs=[
+            pipe,
             text_prompt_input,
             num_iteration_steps,
             guidance_scale,
