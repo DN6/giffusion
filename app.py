@@ -99,20 +99,19 @@ with demo:
     with gr.Row():
         with gr.Column():
             with gr.Row():
-                with gr.Column():
-                    model_name = gr.Textbox(
-                        label="Model Name", value="runwayml/stable-diffusion-v1-5"
-                    )
-                    pipeline_name = gr.Textbox(
-                        label="Model Name", value="StableDiffusionPipeline"
-                    )
-                with gr.Column():
-                    with gr.Row():
-                        load_pipeline_btn = gr.Button(value="Load Pipeline")
-                    with gr.Row():
-                        load_message = gr.Markdown()
-
-                pipe = gr.State()
+                with gr.Accordion("Pipeline Settings"):
+                    with gr.Column():
+                        model_name = gr.Textbox(
+                            label="Model Name", value="runwayml/stable-diffusion-v1-5"
+                        )
+                        pipeline_name = gr.Textbox(
+                            label="Model Name", value="StableDiffusionPipeline"
+                        )
+                    with gr.Column():
+                        with gr.Row():
+                            load_pipeline_btn = gr.Button(value="Load Pipeline")
+                        with gr.Row():
+                            load_message = gr.Markdown()
 
             with gr.Accordion("Output Settings"):
                 with gr.Row():
@@ -129,94 +128,79 @@ with demo:
                     interactive=True,
                 )
 
-            with gr.Accordion("Inspiration Settings"):
+            with gr.Accordion("Inspiration Settings", open=False):
                 with gr.Row():
                     topics = gr.Textbox(lines=1, value="", label="Inspiration Topics")
 
                 with gr.Row():
-                    generate = gr.Button(
+                    generate_btn = gr.Button(
                         value="Give me some inspiration!",
                         variant="secondary",
                         elem_id="prompt-generator-btn",
                     )
-
-            with gr.Row():
-                with gr.Tabs():
-                    with gr.TabItem("Diffusion Settings"):
-                        with gr.Row():
-                            use_fixed_latent = gr.Checkbox(
-                                label="Use Fixed Init Latent"
-                            )
-                            seed = gr.Number(value=42, label="Numerical Seed")
-                            num_iteration_steps = gr.Slider(
-                                10,
-                                1000,
-                                step=10,
-                                value=50,
-                                label="Number of Iteration Steps",
-                            )
-                            guidance_scale = gr.Slider(
-                                0.5,
-                                20,
-                                step=0.5,
-                                value=7.5,
-                                label="Classifier Free Guidance Scale",
-                            )
-                            strength = gr.Slider(
-                                0, 1.0, step=0.1, value=0.5, label="Image Strength"
-                            )
-                            scheduler = gr.Dropdown(
-                                ["klms", "ddim", "pndms"],
-                                value="pndms",
-                                label="Scheduler",
-                            )
-                            batch_size = gr.Slider(
-                                1, 64, step=1, value=1, label="Batch Size"
-                            )
-                        with gr.Row():
-                            with gr.Column():
-                                image_height = gr.Number(
-                                    value=512, label="Image Height"
-                                )
-                            with gr.Column():
-                                image_width = gr.Number(value=512, label="Image Width")
-
-                    with gr.TabItem("Audio Input Settings"):
-                        audio_input = gr.Audio(label="Audio Input", type="filepath")
-                        audio_component = gr.Radio(
-                            ["percussive", "harmonic", "both"],
-                            value="percussive",
-                            label="Audio Component",
-                        )
-                        audio_info_btn = gr.Button(value="Get Key Frame Information")
-
-                    with gr.TabItem("Video Input Settings"):
-                        with gr.Row():
-                            video_input = gr.Video(label="Video Input")
-                            video_info_btn = gr.Button(value="Get Key Frame Infomation")
-
-                    with gr.TabItem("Image Input Settings"):
-                        with gr.Row():
-                            image_input = gr.Image(label="Initial Image", type="pil")
-
-            with gr.Row():
-                submit = gr.Button(
-                    label="Submit",
-                    value="Create",
-                    variant="primary",
-                    elem_id="submit-btn",
+            with gr.Accordion("Diffusion Settings", open=False):
+                use_fixed_latent = gr.Checkbox(label="Use Fixed Init Latent")
+                seed = gr.Number(value=42, label="Numerical Seed")
+                num_iteration_steps = gr.Slider(
+                    10,
+                    1000,
+                    step=10,
+                    value=50,
+                    label="Number of Iteration Steps",
                 )
+                guidance_scale = gr.Slider(
+                    0.5,
+                    20,
+                    step=0.5,
+                    value=7.5,
+                    label="Classifier Free Guidance Scale",
+                )
+                strength = gr.Slider(
+                    0, 1.0, step=0.1, value=0.5, label="Image Strength"
+                )
+                scheduler = gr.Dropdown(
+                    ["klms", "ddim", "pndms"],
+                    value="pndms",
+                    label="Scheduler",
+                )
+                batch_size = gr.Slider(1, 64, step=1, value=1, label="Batch Size")
+                image_height = gr.Number(value=512, label="Image Height")
+                image_width = gr.Number(value=512, label="Image Width")
+
+            with gr.Accordion("Image Input Settings", open=False):
+                image_input = gr.Image(label="Initial Image", type="pil")
+
+            with gr.Accordion("Audio Input Settings", open=False):
+                audio_input = gr.Audio(label="Audio Input", type="filepath")
+                audio_component = gr.Radio(
+                    ["percussive", "harmonic", "both"],
+                    value="percussive",
+                    label="Audio Component",
+                )
+                audio_info_btn = gr.Button(value="Get Key Frame Information")
+
+            with gr.Accordion("Video Input Settings", open=False):
+                video_input = gr.Video(label="Video Input")
+                video_info_btn = gr.Button(value="Get Key Frame Infomation")
 
         with gr.Column(elem_id="output"):
             output = gr.Video(label="Model Output", elem_id="output")
+            submit = gr.Button(
+                label="Submit",
+                value="Create",
+                variant="primary",
+                elem_id="submit-btn",
+            )
+
+    pipe = gr.State()
 
     load_pipeline_btn.click(
         load_pipeline, [model_name, pipeline_name], [pipe, load_message]
     )
 
-    generate.click(
+    generate_btn.click(
         generate_prompt,
-        inputs=[text_prompt_input, fps, topics],
+        inputs=[fps, topics],
         outputs=text_prompt_input,
     )
     audio_info_btn.click(

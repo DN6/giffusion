@@ -3,8 +3,8 @@ import os
 from datetime import datetime
 
 import typer
-from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
-                                  PNDMScheduler)
+from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
 
 from comet import start_experiment
@@ -13,6 +13,9 @@ from flows.flow_byop import BYOPFlow
 from utils import save_gif, save_video
 
 logger = logging.getLogger(__name__)
+
+# Disable denoising progress bar
+disable_progress_bar()
 
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "../generated")
 
@@ -93,18 +96,18 @@ def run(
         pipe=pipe,
         text_prompts=text_prompt_inputs,
         guidance_scale=guidance_scale,
-        num_inference_steps=num_inference_steps,
-        height=height,
-        width=width,
+        num_inference_steps=int(num_inference_steps),
+        height=int(height),
+        width=int(width),
         use_fixed_latent=use_fixed_latent,
         device=device,
         image_input=image_input,
         audio_input=audio_input,
         audio_component=audio_component,
         video_input=video_input,
-        seed=seed,
-        batch_size=batch_size,
-        fps=fps,
+        seed=int(seed),
+        batch_size=int(batch_size),
+        fps=int(fps),
     )
 
     max_frames = flow.max_frames

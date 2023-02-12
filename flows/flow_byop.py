@@ -48,14 +48,15 @@ class BYOPFlow(BaseFlow):
 
         self.check_inputs(image_input, video_input)
         self.image_input = image_input
+        self.video_input = video_input
 
-        if video_input is not None:
-            self.frames, _, _ = load_video_frames(video_input)
+        if self.video_input is not None:
+            self.frames, _, _ = load_video_frames(self.video_input)
             _, self.width, self.height = self.frames[0].size()
             self.key_frames = sync_prompts_to_video(text_prompts, self.frames)
 
         else:
-            self.frames, self.frames, _, _ = (None, None, None)
+            self.frames, self.frames, _, _ = (None, None, None, None)
             self.key_frames = parse_key_frames(text_prompts)
             self.width, self.height = width, height
 
@@ -90,7 +91,7 @@ class BYOPFlow(BaseFlow):
             self.use_fixed_latent,
         )
 
-    def check_inputs(image_input, video_input):
+    def check_inputs(self, image_input, video_input):
         if image_input is not None and video_input is not None:
             raise ValueError(
                 f"Cannot forward both `image_input` and `video_input`. Please make sure to"
@@ -206,6 +207,9 @@ class BYOPFlow(BaseFlow):
             text_batch.append(self.text_embeddings[frame_idx])
             latent_batch.append(self.init_latents[frame_idx])
 
+            if self.frames is not None:
+                image_batch.append(self.frames[frame_idx])
+
             if len(text_batch) % batch_size == 0:
                 text_batch = torch.cat(text_batch, dim=0)
                 latent_batch = torch.cat(latent_batch, dim=0)
@@ -215,7 +219,7 @@ class BYOPFlow(BaseFlow):
                 )
 
                 if self.frames is not None:
-                    image_batch = torch.cat(self.frames[frame_idx], dim=0)
+                    image_batch = torch.cat(image_batch, dim=0)
 
                 yield {
                     "text_embeddings": text_batch,

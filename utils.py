@@ -111,7 +111,7 @@ def load_video_frames(path):
     return frames, audio, metadata
 
 
-def sync_prompts_to_video(self, text_prompt_inputs, video_frames):
+def sync_prompts_to_video(text_prompt_inputs, video_frames):
     n_frames = len(video_frames)
     text_key_frames = parse_key_frames(text_prompt_inputs)
 
