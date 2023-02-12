@@ -13,17 +13,17 @@ def load_pipeline(model_name, pipeline_name):
     try:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        _pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
-        pipe = _pipe_cls.from_pretrained(
+        pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
+        pipe = pipe_cls.from_pretrained(
             model_name, use_auth_token=True, torch_dtype=torch.float16
         )
         pipe.enable_xformers_memory_efficient_attention()
         pipe = pipe.to(device)
 
-        return pipe, "Successfully loaded Pipeline"
+        return pipe, f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
 
     except Exception:
-        return None, "Failed to Load Pipeline"
+        return None, f"Failed to Load Pipeline: {pipeline_name} with {model_name}"
 
 
 def generate_prompt(fps, topics=""):
@@ -51,6 +51,8 @@ def _get_video_frame_information(video_input):
 def predict(
     pipe,
     text_prompt_input,
+    image_width,
+    image_height,
     num_iteration_steps,
     guidance_scale,
     strength,
@@ -64,11 +66,14 @@ def predict(
     image_input,
     video_input,
     output_format,
+    model_name,
 ):
     output = run(
         pipe=pipe,
         text_prompt_inputs=text_prompt_input,
         num_inference_steps=num_iteration_steps,
+        height=image_height,
+        width=image_width,
         guidance_scale=guidance_scale,
         strength=strength,
         seed=int(seed),
@@ -81,6 +86,7 @@ def predict(
         image_input=image_input,
         video_input=video_input,
         output_format=output_format,
+        model_name=model_name,
     )
 
     return output
@@ -108,11 +114,12 @@ with demo:
 
                 pipe = gr.State()
 
-            with gr.Row():
-                output_format = gr.Radio(
-                    ["gif", "mp4"], value="mp4", label="Output Format"
-                )
-                fps = gr.Slider(10, 60, step=1, value=10, label="Output Frame Rate")
+            with gr.Accordion("Output Settings"):
+                with gr.Row():
+                    output_format = gr.Radio(
+                        ["gif", "mp4"], value="mp4", label="Output Format"
+                    )
+                    fps = gr.Slider(10, 60, step=1, value=10, label="Output Frame Rate")
 
             with gr.Row():
                 text_prompt_input = gr.Textbox(
@@ -122,55 +129,66 @@ with demo:
                     interactive=True,
                 )
 
-            with gr.Row():
-                topics = gr.Textbox(lines=1, value="", label="Inspiration Topics")
+            with gr.Accordion("Inspiration Settings"):
+                with gr.Row():
+                    topics = gr.Textbox(lines=1, value="", label="Inspiration Topics")
 
-            with gr.Row():
-                generate = gr.Button(
-                    value="Give me some inspiration!",
-                    variant="secondary",
-                    elem_id="prompt-generator-btn",
-                )
+                with gr.Row():
+                    generate = gr.Button(
+                        value="Give me some inspiration!",
+                        variant="secondary",
+                        elem_id="prompt-generator-btn",
+                    )
 
             with gr.Row():
                 with gr.Tabs():
                     with gr.TabItem("Diffusion Settings"):
-                        use_fixed_latent = gr.Checkbox(label="Use Fixed Init Latent")
-                        seed = gr.Number(value=42, label="Numerical Seed")
-                        num_iteration_steps = gr.Slider(
-                            10,
-                            1000,
-                            step=10,
-                            value=50,
-                            label="Number of Iteration Steps",
-                        )
-                        guidance_scale = gr.Slider(
-                            0.5,
-                            20,
-                            step=0.5,
-                            value=7.5,
-                            label="Classifier Free Guidance Scale",
-                        )
-                        strength = gr.Slider(
-                            0, 1.0, step=0.1, value=0.5, label="Image Strength"
-                        )
-                        scheduler = gr.Dropdown(
-                            ["klms", "ddim", "pndms"],
-                            value="pndms",
-                            label="Scheduler",
-                        )
-                        batch_size = gr.Slider(
-                            1, 16, step=1, value=1, label="Batch Size"
-                        )
+                        with gr.Row():
+                            use_fixed_latent = gr.Checkbox(
+                                label="Use Fixed Init Latent"
+                            )
+                            seed = gr.Number(value=42, label="Numerical Seed")
+                            num_iteration_steps = gr.Slider(
+                                10,
+                                1000,
+                                step=10,
+                                value=50,
+                                label="Number of Iteration Steps",
+                            )
+                            guidance_scale = gr.Slider(
+                                0.5,
+                                20,
+                                step=0.5,
+                                value=7.5,
+                                label="Classifier Free Guidance Scale",
+                            )
+                            strength = gr.Slider(
+                                0, 1.0, step=0.1, value=0.5, label="Image Strength"
+                            )
+                            scheduler = gr.Dropdown(
+                                ["klms", "ddim", "pndms"],
+                                value="pndms",
+                                label="Scheduler",
+                            )
+                            batch_size = gr.Slider(
+                                1, 64, step=1, value=1, label="Batch Size"
+                            )
+                        with gr.Row():
+                            with gr.Column():
+                                image_height = gr.Number(
+                                    value=512, label="Image Height"
+                                )
+                            with gr.Column():
+                                image_width = gr.Number(value=512, label="Image Width")
 
                     with gr.TabItem("Audio Input Settings"):
                         audio_input = gr.Audio(label="Audio Input", type="filepath")
-                        audio_info_btn = gr.Button(value="Get Key Frame Information")
                         audio_component = gr.Radio(
                             ["percussive", "harmonic", "both"],
                             value="percussive",
                             label="Audio Component",
                         )
+                        audio_info_btn = gr.Button(value="Get Key Frame Information")
 
                     with gr.TabItem("Video Input Settings"):
                         with gr.Row():
@@ -217,6 +235,8 @@ with demo:
         inputs=[
             pipe,
             text_prompt_input,
+            image_width,
+            image_height,
             num_iteration_steps,
             guidance_scale,
             strength,
@@ -230,6 +250,7 @@ with demo:
             image_input,
             video_input,
             output_format,
+            model_name,
         ],
         outputs=output,
     )

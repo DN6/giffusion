@@ -8,7 +8,8 @@ from diffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
 from tqdm import tqdm
 
 from comet import start_experiment
-from flows import AudioReactiveFlow, GiffusionFlow, VideoInitFlow
+from flows import BYOPFlow
+from flows.flow_byop import BYOPFlow
 from utils import save_gif, save_video
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,8 @@ SCHEDULERS = dict(
 def run(
     pipe,
     text_prompt_inputs,
+    height=512,
+    width=512,
     num_inference_steps=50,
     guidance_scale=7.5,
     strength=1.0,
@@ -50,11 +53,12 @@ def run(
     audio_component="both",
     image_input=None,
     video_input=None,
-    output_format="gif",
+    output_format="mp4",
+    model_name="runwayml/stable-diffusion-v1-5",
 ):
     if pipe is None:
         raise ValueError(
-            "Pipline object has not been created. Please load a pipline before submitting"
+            "Pipline object has not been created. Please load a Pipline before submitting a run"
         )
 
     experiment = start_experiment()
@@ -76,65 +80,32 @@ def run(
             "use_fixed_latent": use_fixed_latent,
             "audio_component": audio_component,
             "output_format": output_format,
+            "pipeline_name": pipe.config["_class_name"],
+            "model_name": model_name,
         }
-        if video_input is not None:
+        if (video_input is not None) or (image_input is not None):
             parameters.update({"strength": strength})
+
         experiment.log_parameters(parameters)
 
     pipe.scheduler = SCHEDULERS.get(scheduler)
-
-    if audio_input is not None:
-        if experiment:
-            experiment.log_asset(audio_input)
-
-        flow = AudioReactiveFlow(
-            pipe=pipe,
-            text_prompts=text_prompt_inputs,
-            audio_input=audio_input,
-            audio_component=audio_component,
-            guidance_scale=guidance_scale,
-            num_inference_steps=num_inference_steps,
-            height=512,
-            width=512,
-            device=device,
-            fps=fps,
-            use_fixed_latent=use_fixed_latent,
-            seed=seed,
-            batch_size=batch_size,
-            init_image=image_input,
-        )
-    elif video_input is not None:
-        if experiment:
-            experiment.log_asset(video_input)
-
-        flow = VideoInitFlow(
-            pipe=pipe,
-            text_prompts=text_prompt_inputs,
-            video_input=video_input,
-            guidance_scale=guidance_scale,
-            strength=strength,
-            num_inference_steps=num_inference_steps,
-            device=device,
-            fps=fps,
-            use_fixed_latent=use_fixed_latent,
-            batch_size=batch_size,
-            seed=seed,
-        )
-
-    else:
-        flow = GiffusionFlow(
-            pipe=pipe,
-            text_prompts=text_prompt_inputs,
-            guidance_scale=guidance_scale,
-            num_inference_steps=num_inference_steps,
-            height=512,
-            width=512,
-            device=device,
-            use_fixed_latent=use_fixed_latent,
-            batch_size=batch_size,
-            seed=seed,
-            init_image=image_input,
-        )
+    flow = BYOPFlow(
+        pipe=pipe,
+        text_prompts=text_prompt_inputs,
+        guidance_scale=guidance_scale,
+        num_inference_steps=num_inference_steps,
+        height=height,
+        width=width,
+        use_fixed_latent=use_fixed_latent,
+        device=device,
+        image_input=image_input,
+        audio_input=audio_input,
+        audio_component=audio_component,
+        video_input=video_input,
+        seed=seed,
+        batch_size=batch_size,
+        fps=fps,
+    )
 
     max_frames = flow.max_frames
     output_frames = []
