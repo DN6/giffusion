@@ -61,6 +61,7 @@ def predict(
     fps,
     scheduler,
     use_fixed_latent,
+    num_latent_channels,
     audio_input,
     audio_component,
     image_input,
@@ -71,16 +72,17 @@ def predict(
     output = run(
         pipe=pipe,
         text_prompt_inputs=text_prompt_input,
-        num_inference_steps=num_iteration_steps,
-        height=image_height,
-        width=image_width,
+        num_inference_steps=int(num_iteration_steps),
+        height=int(image_height),
+        width=int(image_width),
         guidance_scale=guidance_scale,
         strength=strength,
         seed=int(seed),
-        batch_size=batch_size,
-        fps=fps,
+        batch_size=int(batch_size),
+        fps=int(fps),
         scheduler=scheduler,
         use_fixed_latent=use_fixed_latent,
+        num_latent_channels=int(num_latent_channels),
         audio_input=audio_input,
         audio_component=audio_component,
         image_input=image_input,
@@ -166,6 +168,9 @@ with demo:
                 batch_size = gr.Slider(1, 64, step=1, value=1, label="Batch Size")
                 image_height = gr.Number(value=512, label="Image Height")
                 image_width = gr.Number(value=512, label="Image Width")
+                num_latent_channels = gr.Number(
+                    value=4, label="Number of Latent Channels"
+                )
 
             with gr.Accordion("Image Input Settings", open=False):
                 image_input = gr.Image(label="Initial Image", type="pil")
@@ -229,6 +234,7 @@ with demo:
             fps,
             scheduler,
             use_fixed_latent,
+            num_latent_channels,
             audio_input,
             audio_component,
             image_input,

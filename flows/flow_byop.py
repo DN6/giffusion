@@ -21,6 +21,7 @@ class BYOPFlow(BaseFlow):
         height=512,
         width=512,
         use_fixed_latent=False,
+        num_latent_channels=4,
         image_input=None,
         audio_input=None,
         audio_component="both",
@@ -36,6 +37,9 @@ class BYOPFlow(BaseFlow):
         self.text_prompts = text_prompts
 
         self.use_fixed_latent = use_fixed_latent
+        self.num_latent_channels = num_latent_channels
+        self.vae_scale_factor = self.pipe.vae_scale_factor
+
         self.guidance_scale = guidance_scale
         self.num_inference_steps = num_inference_steps
         self.strength = strength
@@ -106,7 +110,6 @@ class BYOPFlow(BaseFlow):
         audio_array=None,
         sr=None,
     ):
-
         if audio_array is not None:
             return self.get_interpolation_schedule_from_audio(
                 start_frame, end_frame, fps, audio_array, sr
@@ -150,7 +153,12 @@ class BYOPFlow(BaseFlow):
         latent_output = {}
 
         start_latent = torch.randn(
-            (1, self.pipe.unet.in_channels, height // 8, width // 8),
+            (
+                1,
+                self.num_latent_channels,
+                height // self.vae_scale_factor,
+                width // self.vae_scale_factor,
+            ),
             device=self.pipe.device,
             generator=generator.manual_seed(self.seed),
         )
@@ -158,7 +166,6 @@ class BYOPFlow(BaseFlow):
         for idx, (start_key_frame, end_key_frame) in enumerate(
             zip(key_frames, key_frames[1:])
         ):
-
             start_frame, start_prompt = start_key_frame
             end_frame, end_prompt = end_key_frame
 
@@ -166,7 +173,12 @@ class BYOPFlow(BaseFlow):
                 start_latent
                 if use_fixed_latent
                 else torch.randn(
-                    (1, self.pipe.unet.in_channels, height // 8, width // 8),
+                    (
+                        1,
+                        self.num_latent_channels,
+                        height // self.vae_scale_factor,
+                        width // self.vae_scale_factor,
+                    ),
                     device=self.pipe.device,
                     generator=generator.manual_seed(self.seed_schedule[end_frame]),
                 )
