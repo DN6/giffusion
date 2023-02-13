@@ -3,8 +3,20 @@ import os
 from datetime import datetime
 
 import typer
-from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from diffusers.schedulers import (
+    DDIMScheduler,
+    DDPMScheduler,
+    DEISMultistepScheduler,
+    DPMSolverSinglestepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    KDPM2AncestralDiscreteScheduler,
+    LMSDiscreteScheduler,
+    PNDMScheduler,
+    RePaintScheduler,
+)
 from diffusers.utils.logging import disable_progress_bar
+from torch import negative
 from tqdm import tqdm
 
 from comet import start_experiment
@@ -24,16 +36,34 @@ SCHEDULERS = dict(
         beta_start=0.00085,
         beta_end=0.012,
         beta_schedule="scaled_linear",
-        skip_prk_steps=True,
     ),
     ddim=DDIMScheduler(
         beta_start=0.00085,
         beta_end=0.012,
         beta_schedule="scaled_linear",
-        clip_sample=False,
-        set_alpha_to_one=False,
+    ),
+    ddpm=DDPMScheduler(
+        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
     ),
     klms=LMSDiscreteScheduler(
+        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
+    ),
+    dpm=DPMSolverSinglestepScheduler(
+        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
+    ),
+    dpm_ads=KDPM2AncestralDiscreteScheduler(
+        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
+    ),
+    deis=DEISMultistepScheduler(
+        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
+    ),
+    euler=EulerDiscreteScheduler(
+        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
+    ),
+    euler_ads=EulerAncestralDiscreteScheduler(
+        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
+    ),
+    repaint=RePaintScheduler(
         beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
     ),
 )
@@ -42,6 +72,7 @@ SCHEDULERS = dict(
 def run(
     pipe,
     text_prompt_inputs,
+    negative_prompt_inputs,
     height=512,
     width=512,
     num_inference_steps=50,
@@ -76,6 +107,7 @@ def run(
     if experiment:
         parameters = {
             "text_prompt_inputs": text_prompt_inputs,
+            "negative_prompt_inputs": negative_prompt_inputs,
             "num_inference_steps": num_inference_steps,
             "guidance_scale": guidance_scale,
             "scheduler": scheduler,
@@ -96,6 +128,7 @@ def run(
     flow = BYOPFlow(
         pipe=pipe,
         text_prompts=text_prompt_inputs,
+        negative_prompts=negative_prompt_inputs,
         guidance_scale=guidance_scale,
         num_inference_steps=num_inference_steps,
         height=height,
