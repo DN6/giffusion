@@ -51,6 +51,7 @@ def _get_video_frame_information(video_input):
 def predict(
     pipe,
     text_prompt_input,
+    negative_prompt_input,
     image_width,
     image_height,
     num_iteration_steps,
@@ -72,6 +73,7 @@ def predict(
     output = run(
         pipe=pipe,
         text_prompt_inputs=text_prompt_input,
+        negative_prompt_inputs=negative_prompt_input,
         num_inference_steps=int(num_iteration_steps),
         height=int(image_height),
         width=int(image_width),
@@ -129,6 +131,10 @@ with demo:
                     label="Text Prompts",
                     interactive=True,
                 )
+                negative_prompt_input = gr.Textbox(
+                    value="""cartoon, 4K""",
+                    label="Negative Prompts",
+                )
 
             with gr.Accordion("Inspiration Settings", open=False):
                 with gr.Row():
@@ -147,7 +153,7 @@ with demo:
                     10,
                     1000,
                     step=10,
-                    value=50,
+                    value=30,
                     label="Number of Iteration Steps",
                 )
                 guidance_scale = gr.Slider(
@@ -161,8 +167,19 @@ with demo:
                     0, 1.0, step=0.1, value=0.5, label="Image Strength"
                 )
                 scheduler = gr.Dropdown(
-                    ["klms", "ddim", "pndms"],
-                    value="pndms",
+                    [
+                        "klms",
+                        "ddim",
+                        "ddpm",
+                        "pndms",
+                        "dpm",
+                        "dpm_ads",
+                        "deis",
+                        "euler",
+                        "euler_ads",
+                        "repaint",
+                    ],
+                    value="deis",
                     label="Scheduler",
                 )
                 batch_size = gr.Slider(1, 64, step=1, value=1, label="Batch Size")

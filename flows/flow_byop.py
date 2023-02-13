@@ -4,7 +4,8 @@ import random
 import librosa
 import numpy as np
 import torch
-from utils import load_video_frames, parse_key_frames, slerp, sync_prompts_to_video
+from utils import (load_video_frames, parse_key_frames, slerp,
+                   sync_prompts_to_video)
 
 from .flow_base import BaseFlow, to_tensor
 
@@ -29,12 +30,14 @@ class BYOPFlow(BaseFlow):
         seed=42,
         batch_size=1,
         fps=10,
+        negative_prompts=[""],
     ):
         super().__init__(pipe, device, batch_size)
 
         self.pipe_signature = set(inspect.signature(self.pipe).parameters.keys())
 
         self.text_prompts = text_prompts
+        self.negative_prompts = negative_prompts
 
         self.use_fixed_latent = use_fixed_latent
         self.num_latent_channels = num_latent_channels
@@ -56,13 +59,13 @@ class BYOPFlow(BaseFlow):
 
         if self.video_input is not None:
             self.frames, _, _ = load_video_frames(self.video_input)
-            _, self.width, self.height = self.frames[0].size()
+            _, self.height, self.width = self.frames[0].size()
             self.key_frames = sync_prompts_to_video(text_prompts, self.frames)
 
         else:
             self.frames, self.frames, _, _ = (None, None, None, None)
             self.key_frames = parse_key_frames(text_prompts)
-            self.width, self.height = width, height
+            self.height, self.width = height, width
 
         if audio_input is not None:
             self.audio_array, self.sr = librosa.load(audio_input)
@@ -220,7 +223,7 @@ class BYOPFlow(BaseFlow):
             latent_batch.append(self.init_latents[frame_idx])
 
             if self.frames is not None:
-                image_batch.append(self.frames[frame_idx])
+                image_batch.append(self.frames[frame_idx].unsqueeze(0))
 
             if len(text_batch) % batch_size == 0:
                 text_batch = torch.cat(text_batch, dim=0)
@@ -270,6 +273,9 @@ class BYOPFlow(BaseFlow):
 
         if "prompt_embeds" in self.pipe_signature:
             pipe_kwargs.update({"prompt_embeds": prompt_embeds})
+
+        if "negative_prompts" in self.pipe_signature:
+            pipe_kwargs.update({"negative_prompts": self.negative_prompts})
 
         if "image" in self.pipe_signature:
             if (self.video_input is not None) and (len(images) != 0):
