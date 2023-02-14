@@ -31,42 +31,21 @@ disable_progress_bar()
 
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "../generated")
 
-SCHEDULERS = dict(
-    pndms=PNDMScheduler(
-        beta_start=0.00085,
-        beta_end=0.012,
-        beta_schedule="scaled_linear",
-    ),
-    ddim=DDIMScheduler(
-        beta_start=0.00085,
-        beta_end=0.012,
-        beta_schedule="scaled_linear",
-    ),
-    ddpm=DDPMScheduler(
-        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
-    ),
-    klms=LMSDiscreteScheduler(
-        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
-    ),
-    dpm=DPMSolverSinglestepScheduler(
-        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
-    ),
-    dpm_ads=KDPM2AncestralDiscreteScheduler(
-        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
-    ),
-    deis=DEISMultistepScheduler(
-        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
-    ),
-    euler=EulerDiscreteScheduler(
-        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
-    ),
-    euler_ads=EulerAncestralDiscreteScheduler(
-        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
-    ),
-    repaint=RePaintScheduler(
-        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
-    ),
-)
+
+def load_scheduler(scheduler, **kwargs):
+    scheduler_map = dict(
+        pndms=PNDMScheduler(**kwargs),
+        ddim=DDIMScheduler(**kwargs),
+        ddpm=DDPMScheduler(**kwargs),
+        klms=LMSDiscreteScheduler(**kwargs),
+        dpm=DPMSolverSinglestepScheduler(**kwargs),
+        dpm_ads=KDPM2AncestralDiscreteScheduler(**kwargs),
+        deis=DEISMultistepScheduler(**kwargs),
+        euler=EulerDiscreteScheduler(**kwargs),
+        euler_ads=EulerAncestralDiscreteScheduler(**kwargs),
+        repaint=RePaintScheduler(**kwargs),
+    )
+    return scheduler_map.get(scheduler)
 
 
 def run(
@@ -124,7 +103,9 @@ def run(
 
         experiment.log_parameters(parameters)
 
-    pipe.scheduler = SCHEDULERS.get(scheduler)
+    pipe.scheduler = load_scheduler(
+        scheduler, beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
+    )
     flow = BYOPFlow(
         pipe=pipe,
         text_prompts=text_prompt_inputs,

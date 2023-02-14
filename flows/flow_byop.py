@@ -7,7 +7,7 @@ import torch
 from utils import (load_video_frames, parse_key_frames, slerp,
                    sync_prompts_to_video)
 
-from .flow_base import BaseFlow, to_tensor
+from .flow_base import BaseFlow
 
 
 class BYOPFlow(BaseFlow):
@@ -275,7 +275,9 @@ class BYOPFlow(BaseFlow):
             pipe_kwargs.update({"prompt_embeds": prompt_embeds})
 
         if "negative_prompts" in self.pipe_signature:
-            pipe_kwargs.update({"negative_prompts": self.negative_prompts})
+            pipe_kwargs.update(
+                {"negative_prompts": [self.negative_prompts] * len(prompt_embeds)}
+            )
 
         if "image" in self.pipe_signature:
             if (self.video_input is not None) and (len(images) != 0):
