@@ -115,6 +115,7 @@ def run(
         height=height,
         width=width,
         use_fixed_latent=use_fixed_latent,
+        num_latent_channels=num_latent_channels,
         device=device,
         image_input=image_input,
         audio_input=audio_input,

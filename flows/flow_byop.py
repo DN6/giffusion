@@ -30,7 +30,7 @@ class BYOPFlow(BaseFlow):
         seed=42,
         batch_size=1,
         fps=10,
-        negative_prompts=[""],
+        negative_prompts="",
     ):
         super().__init__(pipe, device, batch_size)
 
@@ -216,7 +216,6 @@ class BYOPFlow(BaseFlow):
         text_batch = []
         latent_batch = []
         image_batch = []
-        generator_batch = []
 
         for frame_idx in frames:
             text_batch.append(self.text_embeddings[frame_idx])
@@ -229,10 +228,6 @@ class BYOPFlow(BaseFlow):
                 text_batch = torch.cat(text_batch, dim=0)
                 latent_batch = torch.cat(latent_batch, dim=0)
 
-                generator_batch.append(
-                    self.generator.manual_seed(self.seed_schedule[frame_idx])
-                )
-
                 if self.frames is not None:
                     image_batch = torch.cat(image_batch, dim=0)
 
@@ -240,19 +235,16 @@ class BYOPFlow(BaseFlow):
                     "text_embeddings": text_batch,
                     "init_latents": latent_batch,
                     "images": image_batch,
-                    "generators": generator_batch,
                 }
 
                 text_batch = []
                 latent_batch = []
                 image_batch = []
-                generator_batch = []
 
     def prepare_inputs(self, batch):
         prompt_embeds = batch["text_embeddings"]
         latents = batch["init_latents"]
         images = batch["images"]
-        generators = batch["generators"]
 
         pipe_kwargs = dict(
             num_inference_steps=self.num_inference_steps,
@@ -284,10 +276,10 @@ class BYOPFlow(BaseFlow):
                 pipe_kwargs.update({"image": images})
 
             elif self.image_input is not None:
-                pipe_kwargs.update({"image": self.image_input})
+                pipe_kwargs.update({"image": [self.image_input] * len(prompt_embeds)})
 
         if "generator" in self.pipe_signature:
-            pipe_kwargs.update({"generator": generators})
+            pipe_kwargs.update({"generator": self.generator.manual_seed(self.seed)})
 
         return pipe_kwargs
 

@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 from PIL import Image
 from torchvision.io import read_video, write_video
-from torchvision.transforms.functional import pil_to_tensor
+from torchvision.transforms.functional import pil_to_tensor, to_pil_image
 
 
 def parse_key_frames(prompts, prompt_parser=None):
