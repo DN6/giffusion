@@ -4,18 +4,28 @@ import gradio as gr
 import torch
 
 from generate import run
-from utils import get_audio_key_frame_information, get_video_frame_information
+from utils import (get_audio_key_frame_information,
+                   get_video_frame_information, load_video_frames,
+                   to_pil_image)
 
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
 
-def load_pipeline(model_name, pipeline_name):
+def load_pipeline(model_name, pipeline_name, pipe):
     try:
+        # clear existing model from memory
+        if pipe is not None:
+            del pipe
+            torch.cuda.empty_cache()
+
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
         pipe = pipe_cls.from_pretrained(
-            model_name, use_auth_token=True, torch_dtype=torch.float16
+            model_name,
+            use_auth_token=True,
+            torch_dtype=torch.float16,
+            safety_checker=None,
         )
         pipe.enable_xformers_memory_efficient_attention()
         pipe = pipe.to(device)
@@ -46,6 +56,16 @@ def _get_video_frame_information(video_input):
     max_frames, fps = get_video_frame_information(video_input)
 
     return "\n".join(["0: ", f"{max_frames - 1}: "]), gr.update(value=fps)
+
+
+def send_to_image_input(video, frame_id):
+    frames, _, _ = load_video_frames(video)
+
+    return to_pil_image(frames[int(frame_id)])
+
+
+def send_to_video_input(video):
+    return video
 
 
 def predict(
@@ -101,15 +121,15 @@ demo = gr.Blocks()
 with demo:
     gr.Markdown("# GIFfusion 💥")
     with gr.Row():
-        with gr.Column():
+        with gr.Column(scale=1):
             with gr.Row():
-                with gr.Accordion("Pipeline Settings"):
+                with gr.Accordion("Pipeline Settings: Load Models and Pipelines"):
                     with gr.Column():
                         model_name = gr.Textbox(
                             label="Model Name", value="runwayml/stable-diffusion-v1-5"
                         )
                         pipeline_name = gr.Textbox(
-                            label="Model Name", value="StableDiffusionPipeline"
+                            label="Model Name", value="DiffusionPipeline"
                         )
                     with gr.Column():
                         with gr.Row():
@@ -117,36 +137,14 @@ with demo:
                         with gr.Row():
                             load_message = gr.Markdown()
 
-            with gr.Accordion("Output Settings"):
+            with gr.Accordion("Output Settings: Set output file format and FPS"):
                 with gr.Row():
                     output_format = gr.Radio(
                         ["gif", "mp4"], value="mp4", label="Output Format"
                     )
-                    fps = gr.Slider(10, 60, step=1, value=10, label="Output Frame Rate")
+                    fps = gr.Slider(10, 60, step=1, value=30, label="Output Frame Rate")
 
-            with gr.Row():
-                text_prompt_input = gr.Textbox(
-                    lines=10,
-                    value="""0: A corgi in the clouds\n60: A corgi in the ocean""",
-                    label="Text Prompts",
-                    interactive=True,
-                )
-                negative_prompt_input = gr.Textbox(
-                    value="""cartoon, 4K""",
-                    label="Negative Prompts",
-                )
-
-            with gr.Accordion("Inspiration Settings", open=False):
-                with gr.Row():
-                    topics = gr.Textbox(lines=1, value="", label="Inspiration Topics")
-
-                with gr.Row():
-                    generate_btn = gr.Button(
-                        value="Give me some inspiration!",
-                        variant="secondary",
-                        elem_id="prompt-generator-btn",
-                    )
-            with gr.Accordion("Diffusion Settings", open=False):
+            with gr.Accordion("Diffusion Settings"):
                 use_fixed_latent = gr.Checkbox(label="Use Fixed Init Latent")
                 seed = gr.Number(value=42, label="Numerical Seed")
                 num_iteration_steps = gr.Slider(
@@ -188,24 +186,18 @@ with demo:
                 num_latent_channels = gr.Number(
                     value=4, label="Number of Latent Channels"
                 )
+            with gr.Accordion("Inspiration Settings", open=False):
+                with gr.Row():
+                    topics = gr.Textbox(lines=1, value="", label="Inspiration Topics")
 
-            with gr.Accordion("Image Input Settings", open=False):
-                image_input = gr.Image(label="Initial Image", type="pil")
+                with gr.Row():
+                    generate_btn = gr.Button(
+                        value="Give me some inspiration!",
+                        variant="secondary",
+                        elem_id="prompt-generator-btn",
+                    )
 
-            with gr.Accordion("Audio Input Settings", open=False):
-                audio_input = gr.Audio(label="Audio Input", type="filepath")
-                audio_component = gr.Radio(
-                    ["percussive", "harmonic", "both"],
-                    value="percussive",
-                    label="Audio Component",
-                )
-                audio_info_btn = gr.Button(value="Get Key Frame Information")
-
-            with gr.Accordion("Video Input Settings", open=False):
-                video_input = gr.Video(label="Video Input")
-                video_info_btn = gr.Button(value="Get Key Frame Infomation")
-
-        with gr.Column(elem_id="output"):
+        with gr.Column(elem_id="output", scale=2):
             output = gr.Video(label="Model Output", elem_id="output")
             submit = gr.Button(
                 label="Submit",
@@ -213,11 +205,48 @@ with demo:
                 variant="primary",
                 elem_id="submit-btn",
             )
+            with gr.Row():
+                text_prompt_input = gr.Textbox(
+                    lines=10,
+                    value="""0: A corgi in the clouds\n60: A corgi in the ocean""",
+                    label="Text Prompts",
+                    interactive=True,
+                )
+            with gr.Row():
+                negative_prompt_input = gr.Textbox(
+                    value="""low resolution""",
+                    label="Negative Prompts",
+                    interactive=True,
+                )
+
+        with gr.Column(scale=1):
+            with gr.Accordion("Image Input", open=False):
+                image_input = gr.Image(label="Initial Image", type="pil")
+
+            with gr.Accordion("Audio Input", open=False):
+                audio_input = gr.Audio(label="Audio Input", type="filepath")
+                audio_component = gr.Dropdown(
+                    ["percussive", "harmonic", "both"],
+                    value="percussive",
+                    label="Audio Component",
+                )
+                audio_info_btn = gr.Button(value="Get Key Frame Information")
+
+            with gr.Accordion("Video Input", open=False):
+                video_input = gr.Video(label="Video Input")
+                video_info_btn = gr.Button(value="Get Key Frame Infomation")
+
+            with gr.Accordion("Resample Output", open=False):
+                with gr.Accordion("Send to Image Input", open=False):
+                    frame_id = gr.Number(value=0, label="Frame ID")
+                    send_to_image_input_btn = gr.Button("Send to Image Input")
+                with gr.Accordion("Send to Video Input", open=False):
+                    send_to_video_input_btn = gr.Button("Send to Video Input")
 
     pipe = gr.State()
 
     load_pipeline_btn.click(
-        load_pipeline, [model_name, pipeline_name], [pipe, load_message]
+        load_pipeline, [model_name, pipeline_name, pipe], [pipe, load_message]
     )
 
     generate_btn.click(
@@ -236,11 +265,15 @@ with demo:
         outputs=[text_prompt_input, fps],
     )
 
+    send_to_image_input_btn.click(send_to_image_input, [output, frame_id], image_input)
+    send_to_video_input_btn.click(send_to_video_input, [output], [video_input])
+
     submit.click(
         fn=predict,
         inputs=[
             pipe,
             text_prompt_input,
+            negative_prompt_input,
             image_width,
             image_height,
             num_iteration_steps,
