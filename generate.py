@@ -3,18 +3,14 @@ import os
 from datetime import datetime
 
 import typer
-from diffusers.schedulers import (
-    DDIMScheduler,
-    DDPMScheduler,
-    DEISMultistepScheduler,
-    DPMSolverSinglestepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    KDPM2AncestralDiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    RePaintScheduler,
-)
+from diffusers.schedulers import (DDIMScheduler, DDPMScheduler,
+                                  DEISMultistepScheduler,
+                                  DPMSolverSinglestepScheduler,
+                                  EulerAncestralDiscreteScheduler,
+                                  EulerDiscreteScheduler,
+                                  KDPM2AncestralDiscreteScheduler,
+                                  LMSDiscreteScheduler, PNDMScheduler,
+                                  RePaintScheduler)
 from diffusers.utils.logging import disable_progress_bar
 from torch import negative
 from tqdm import tqdm
@@ -62,6 +58,7 @@ def run(
     fps=24,
     scheduler="pndms",
     use_fixed_latent=False,
+    use_prompt_embeds=True,
     num_latent_channels=4,
     audio_input=None,
     audio_component="both",
@@ -115,6 +112,7 @@ def run(
         height=height,
         width=width,
         use_fixed_latent=use_fixed_latent,
+        use_prompt_embeds=use_prompt_embeds,
         num_latent_channels=num_latent_channels,
         device=device,
         image_input=image_input,
@@ -147,12 +145,8 @@ def run(
         output_filename = f"{run_path}/output.gif"
         save_gif(frames=output_frames, filename=output_filename, fps=fps)
 
-        preview_filename = f"{run_path}/output-preview.gif"
-        save_gif(frames=output_frames, filename=preview_filename, fps=fps, quality=35)
-
     if output_format == "mp4":
         output_filename = f"{run_path}/output.mp4"
-
         save_video(
             frames=output_frames,
             filename=output_filename,
@@ -160,20 +154,10 @@ def run(
             audio_input=audio_input,
         )
 
-        preview_filename = f"{run_path}/output-preview.mp4"
-        save_video(
-            frames=output_frames,
-            filename=preview_filename,
-            fps=fps,
-            quality=35,
-            audio_input=audio_input,
-        )
-
     if experiment:
         experiment.log_asset(output_filename)
-        experiment.log_asset(preview_filename)
 
-    return preview_filename
+    return output_filename
 
 
 if __name__ == "__main__":

@@ -3,9 +3,10 @@ import random
 
 import librosa
 import numpy as np
+import pandas as pd
 import torch
-from utils import (load_video_frames, parse_key_frames, slerp,
-                   sync_prompts_to_video)
+from transformers import POOLFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP
+from utils import load_video_frames, parse_key_frames, slerp, sync_prompts_to_video
 
 from .flow_base import BaseFlow
 
@@ -22,6 +23,7 @@ class BYOPFlow(BaseFlow):
         height=512,
         width=512,
         use_fixed_latent=False,
+        use_prompt_embeds=True,
         num_latent_channels=4,
         image_input=None,
         audio_input=None,
@@ -40,6 +42,7 @@ class BYOPFlow(BaseFlow):
         self.negative_prompts = negative_prompts
 
         self.use_fixed_latent = use_fixed_latent
+        self.use_prompt_embeds = use_prompt_embeds
         self.num_latent_channels = num_latent_channels
         self.vae_scale_factor = self.pipe.vae_scale_factor
 
@@ -60,11 +63,11 @@ class BYOPFlow(BaseFlow):
         if self.video_input is not None:
             self.frames, _, _ = load_video_frames(self.video_input)
             _, self.height, self.width = self.frames[0].size()
-            self.key_frames = sync_prompts_to_video(text_prompts, self.frames)
+            key_frames = sync_prompts_to_video(text_prompts, self.frames)
 
         else:
             self.frames, self.frames, _, _ = (None, None, None, None)
-            self.key_frames = parse_key_frames(text_prompts)
+            key_frames = parse_key_frames(text_prompts)
             self.height, self.width = height, width
 
         if audio_input is not None:
@@ -79,7 +82,7 @@ class BYOPFlow(BaseFlow):
         else:
             self.audio_array, self.sr = (None, None)
 
-        last_frame, _ = max(self.key_frames, key=lambda x: x[0])
+        last_frame, _ = max(key_frames, key=lambda x: x[0])
         self.max_frames = last_frame + 1
 
         random.seed(self.seed)
@@ -87,16 +90,11 @@ class BYOPFlow(BaseFlow):
             random.randint(0, 18446744073709551615) for i in range(self.max_frames)
         ]
 
-        (
-            self.init_latents,
-            self.text_embeddings,
-        ) = self.get_init_latents_and_text_embeddings(
-            self.key_frames,
-            self.height,
-            self.width,
-            self.generator,
-            self.use_fixed_latent,
-        )
+        self.init_latents = self.get_init_latents(key_frames)
+        if self.use_prompt_embeds:
+            self.prompts = self.get_prompt_embeddings(key_frames)
+        else:
+            self.prompts = self.get_prompts(key_frames)
 
     def check_inputs(self, image_input, video_input):
         if image_input is not None and video_input is not None:
@@ -144,27 +142,8 @@ class BYOPFlow(BaseFlow):
         return interp_schedule
 
     @torch.no_grad()
-    def get_init_latents_and_text_embeddings(
-        self,
-        key_frames,
-        height,
-        width,
-        generator,
-        use_fixed_latent=False,
-    ):
-        text_output = {}
-        latent_output = {}
-
-        start_latent = torch.randn(
-            (
-                1,
-                self.num_latent_channels,
-                height // self.vae_scale_factor,
-                width // self.vae_scale_factor,
-            ),
-            device=self.pipe.device,
-            generator=generator.manual_seed(self.seed),
-        )
+    def get_prompt_embeddings(self, key_frames):
+        output = {}
 
         for idx, (start_key_frame, end_key_frame) in enumerate(
             zip(key_frames, key_frames[1:])
@@ -172,23 +151,69 @@ class BYOPFlow(BaseFlow):
             start_frame, start_prompt = start_key_frame
             end_frame, end_prompt = end_key_frame
 
+            start_prompt_embed = self.prompt_to_embedding(start_prompt)
+            end_prompt_embed = self.prompt_to_embedding(end_prompt)
+
+            interp_schedule = self.get_interpolation_schedule(
+                start_frame,
+                end_frame,
+                self.fps,
+                self.audio_array,
+                self.sr,
+            )
+
+            for i, t in enumerate(interp_schedule):
+                prompt_embed = slerp(float(t), start_prompt_embed, end_prompt_embed)
+                output[i + start_frame] = prompt_embed
+
+        return output
+
+    def get_prompts(self, key_frames, integer=True, method="linear"):
+        output = {}
+        key_frame_series = pd.Series([np.nan for a in range(self.max_frames)])
+        for frame_idx, prompt in key_frames:
+            key_frame_series[frame_idx] = prompt
+
+        key_frame_series = key_frame_series.ffill()
+        for frame_idx, prompt in enumerate(key_frame_series):
+            output[frame_idx] = prompt
+
+        return output
+
+    @torch.no_grad()
+    def get_init_latents(self, key_frames):
+        output = {}
+        start_latent = torch.randn(
+            (
+                1,
+                self.num_latent_channels,
+                self.height // self.vae_scale_factor,
+                self.width // self.vae_scale_factor,
+            ),
+            device=self.pipe.device,
+            generator=self.generator.manual_seed(self.seed),
+        )
+
+        for idx, (start_key_frame, end_key_frame) in enumerate(
+            zip(key_frames, key_frames[1:])
+        ):
+            start_frame, _ = start_key_frame
+            end_frame, _ = end_key_frame
+
             end_latent = (
                 start_latent
-                if use_fixed_latent
+                if self.use_fixed_latent
                 else torch.randn(
                     (
                         1,
                         self.num_latent_channels,
-                        height // self.vae_scale_factor,
-                        width // self.vae_scale_factor,
+                        self.height // self.vae_scale_factor,
+                        self.width // self.vae_scale_factor,
                     ),
                     device=self.pipe.device,
-                    generator=generator.manual_seed(self.seed_schedule[end_frame]),
+                    generator=self.generator.manual_seed(self.seed_schedule[end_frame]),
                 )
             )
-
-            start_text_embeddings = self.prompt_to_embedding(start_prompt)
-            end_text_embeddings = self.prompt_to_embedding(end_prompt)
 
             interp_schedule = self.get_interpolation_schedule(
                 start_frame,
@@ -200,49 +225,45 @@ class BYOPFlow(BaseFlow):
 
             for i, t in enumerate(interp_schedule):
                 latents = slerp(float(t), start_latent, end_latent)
-                start_text_embeddings, end_text_embeddings = self.pad_embedding(
-                    start_text_embeddings, end_text_embeddings
-                )
-                embeddings = slerp(float(t), start_text_embeddings, end_text_embeddings)
-
-                latent_output[i + start_frame] = latents
-                text_output[i + start_frame] = embeddings
+                output[i + start_frame] = latents
 
             start_latent = end_latent
 
-        return latent_output, text_output
+        return output
 
     def batch_generator(self, frames, batch_size):
-        text_batch = []
+        prompt_batch = []
         latent_batch = []
         image_batch = []
 
         for frame_idx in frames:
-            text_batch.append(self.text_embeddings[frame_idx])
+            prompt_batch.append(self.prompts[frame_idx])
             latent_batch.append(self.init_latents[frame_idx])
 
             if self.frames is not None:
                 image_batch.append(self.frames[frame_idx].unsqueeze(0))
 
-            if len(text_batch) % batch_size == 0:
-                text_batch = torch.cat(text_batch, dim=0)
+            if len(prompt_batch) % batch_size == 0:
+                if self.use_prompt_embeds:
+                    prompt_batch = torch.cat(prompt_batch, dim=0)
+
                 latent_batch = torch.cat(latent_batch, dim=0)
 
                 if self.frames is not None:
                     image_batch = torch.cat(image_batch, dim=0)
 
                 yield {
-                    "text_embeddings": text_batch,
+                    "prompts": prompt_batch,
                     "init_latents": latent_batch,
                     "images": image_batch,
                 }
 
-                text_batch = []
+                prompt_batch = []
                 latent_batch = []
                 image_batch = []
 
     def prepare_inputs(self, batch):
-        prompt_embeds = batch["text_embeddings"]
+        prompts = batch["prompts"]
         latents = batch["init_latents"]
         images = batch["images"]
 
@@ -263,12 +284,14 @@ class BYOPFlow(BaseFlow):
         if "latents" in self.pipe_signature:
             pipe_kwargs.update({"latents": latents})
 
-        if "prompt_embeds" in self.pipe_signature:
-            pipe_kwargs.update({"prompt_embeds": prompt_embeds})
+        if "prompt_embeds" in self.pipe_signature and self.use_prompt_embeds:
+            pipe_kwargs.update({"prompt_embeds": prompts})
+        elif "prompt" in self.pipe_signature and not self.use_prompt_embeds:
+            pipe_kwargs.update({"prompt": prompts})
 
         if "negative_prompts" in self.pipe_signature:
             pipe_kwargs.update(
-                {"negative_prompts": [self.negative_prompts] * len(prompt_embeds)}
+                {"negative_prompts": [self.negative_prompts] * len(prompts)}
             )
 
         if "image" in self.pipe_signature:
@@ -276,7 +299,7 @@ class BYOPFlow(BaseFlow):
                 pipe_kwargs.update({"image": images})
 
             elif self.image_input is not None:
-                pipe_kwargs.update({"image": [self.image_input] * len(prompt_embeds)})
+                pipe_kwargs.update({"image": [self.image_input] * len(prompts)})
 
         if "generator" in self.pipe_signature:
             pipe_kwargs.update({"generator": self.generator.manual_seed(self.seed)})
