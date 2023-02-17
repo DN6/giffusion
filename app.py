@@ -4,9 +4,12 @@ import gradio as gr
 import torch
 
 from generate import run
-from utils import (get_audio_key_frame_information,
-                   get_video_frame_information, load_video_frames,
-                   to_pil_image)
+from utils import (
+    get_audio_key_frame_information,
+    get_video_frame_information,
+    load_video_frames,
+    to_pil_image,
+)
 
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
@@ -82,6 +85,7 @@ def predict(
     fps,
     scheduler,
     use_fixed_latent,
+    use_prompt_embeds,
     num_latent_channels,
     audio_input,
     audio_component,
@@ -104,6 +108,7 @@ def predict(
         fps=int(fps),
         scheduler=scheduler,
         use_fixed_latent=use_fixed_latent,
+        use_prompt_embeds=use_prompt_embeds,
         num_latent_channels=int(num_latent_channels),
         audio_input=audio_input,
         audio_component=audio_component,
@@ -137,15 +142,20 @@ with demo:
                         with gr.Row():
                             load_message = gr.Markdown()
 
-            with gr.Accordion("Output Settings: Set output file format and FPS"):
+            with gr.Accordion(
+                "Output Settings: Set output file format and FPS", open=False
+            ):
                 with gr.Row():
                     output_format = gr.Radio(
                         ["gif", "mp4"], value="mp4", label="Output Format"
                     )
-                    fps = gr.Slider(10, 60, step=1, value=30, label="Output Frame Rate")
+                    fps = gr.Slider(10, 60, step=1, value=10, label="Output Frame Rate")
 
             with gr.Accordion("Diffusion Settings"):
                 use_fixed_latent = gr.Checkbox(label="Use Fixed Init Latent")
+                use_prompt_embeds = gr.Checkbox(
+                    label="Use Prompt Embeds", value=True, interactive=True
+                )
                 seed = gr.Number(value=42, label="Numerical Seed")
                 num_iteration_steps = gr.Slider(
                     10,
@@ -284,6 +294,7 @@ with demo:
             fps,
             scheduler,
             use_fixed_latent,
+            use_prompt_embeds,
             num_latent_channels,
             audio_input,
             audio_component,
@@ -298,4 +309,4 @@ with demo:
 demo.queue(concurrency_count=2)
 
 if __name__ == "__main__":
-    demo.launch(share=True, debug=True)
+    demo.launch(share=True)
