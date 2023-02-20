@@ -3,16 +3,19 @@ import os
 from datetime import datetime
 
 import typer
-from diffusers.schedulers import (DDIMScheduler, DDPMScheduler,
-                                  DEISMultistepScheduler,
-                                  DPMSolverSinglestepScheduler,
-                                  EulerAncestralDiscreteScheduler,
-                                  EulerDiscreteScheduler,
-                                  KDPM2AncestralDiscreteScheduler,
-                                  LMSDiscreteScheduler, PNDMScheduler,
-                                  RePaintScheduler)
+from diffusers.schedulers import (
+    DDIMScheduler,
+    DDPMScheduler,
+    DEISMultistepScheduler,
+    DPMSolverSinglestepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    KDPM2AncestralDiscreteScheduler,
+    LMSDiscreteScheduler,
+    PNDMScheduler,
+    RePaintScheduler,
+)
 from diffusers.utils.logging import disable_progress_bar
-from torch import negative
 from tqdm import tqdm
 
 from comet import start_experiment
@@ -90,6 +93,7 @@ def run(
             "seed": seed,
             "fps": fps,
             "use_fixed_latent": use_fixed_latent,
+            "use_prompt_embeds": use_prompt_embeds,
             "audio_component": audio_component,
             "output_format": output_format,
             "pipeline_name": pipe.config["_class_name"],

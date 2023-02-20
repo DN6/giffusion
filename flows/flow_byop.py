@@ -5,7 +5,6 @@ import librosa
 import numpy as np
 import pandas as pd
 import torch
-from transformers import POOLFORMER_PRETRAINED_CONFIG_ARCHIVE_MAP
 from utils import load_video_frames, parse_key_frames, slerp, sync_prompts_to_video
 
 from .flow_base import BaseFlow
