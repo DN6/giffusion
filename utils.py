@@ -2,7 +2,6 @@ import re
 
 import librosa
 import numpy as np
-import pandas as pd
 import torch
 from PIL import Image
 from torchvision.io import read_video, write_video
