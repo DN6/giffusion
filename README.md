@@ -10,6 +10,11 @@ Giffusion is a Web UI for generating GIFs and Videos using Stable Diffusion.
 
 Giffusion supports using any pipeline and compatible checkpoint from the [Diffusers](https://huggingface.co/docs/diffusers/index) library. Simply paste in the checkpoint name and pipeline name in the `Pipeline Settings`
 
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220323500-ae12c752-9cfe-441e-ba03-22a0ea787139.gif" width="800" title="hover text">
+</p>
+
+
 ### Multiframe Generation
 
 Giffusion follows a prompt syntax similar to the one used in [Deforum Art's Stable Diffusion Notebook](https://deforum.github.io/)
@@ -27,20 +32,36 @@ You might recall that Diffusion Models work by turning noise into images. Stable
 
 The inputs to our model are a noise tensor and text embedding tensor. Using our key frames as our start and end points, we can produce images in between these frames by interpolating these tensors.
 
-![output-corgi-final](https://user-images.githubusercontent.com/7529846/204506200-49f91bd1-396f-4cf1-927c-c91b885f5c4a.gif)
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/204506200-49f91bd1-396f-4cf1-927c-c91b885f5c4a.gif" width="256" title="hover text">
+</p>
 
 ### Inspiration Button
 
 Creating prompts can be challenging. Click the `Give me some inspiration` button to automatically generate prompts for you.
 
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220324203-444c1720-c71b-4ccf-b08f-5b20668b7f98.gif" width="800" title="hover text">
+</p>
+
 You can even provide a list of topics for the inspiration button to use as a starting point.
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220324835-fbbae3be-9a9a-48f9-a773-5e45c6274ed2.gif" width="800" title="hover text">
+</p>
+
 
 ### Multimedia Support
 
-#### Image Input
+<details>
+<summary>Image Input</summary>
+
 You can seed the generation process with an inital image. Upload your file using the, using the `Image Input` dropdown.
 
-#### Audio Input
+</details>
+
+<details>
+<summary>Audio Input</summary>
 
 Drive your GIF and Video animations using audio.
 
@@ -54,8 +75,10 @@ In order to use audio to drive your animations,
 Additionally, timestamp information for these key frames is also extracted for reference in case you would like to sync your prompts to a particular time in the audio.
 
 **Note:** The key frames will change based the frame rate that you have set in the UI.
+</details>
 
-#### Video Input
+<details>
+<summary>Video Input</summary>
 
 You can use frames from an existing video as initial images in the diffusion process.
 
@@ -67,19 +90,32 @@ To use video initialization:
 
 2. Upload your file. Click `Get Key Frame Information` to extract the maximum number of frames present in the video and to update the frame rate setting in the UI to match the frame rate of the input video.
 
+</details>
+
 #### Resampling Output Generations
 
 You can resample videos and GIFs created in the output tab and send them either to the Image Input or Video Input.
 
-**Resamplng to Image Input**
+<details>
+<summary>Resampling to Image Input</summary>
 
 To sample an image from a video, select the frame id you want to sample from your output video or GIF and click on `Send to Image Input`
 
-**Resampling to Video Input**
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220325938-22438722-d4ac-4a35-995f-51d8dbafaa34.gif" width="800" title="hover text">
+</p>
+</details>
 
-**Note:** This option only works if your output format is set to `mp4`
+<details>
+<summary>Resampling to Video Input</summary>
 
 To resample a video, click on `Send to Video Input`
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220322852-f2fab800-43dc-41b8-bdb4-c4057bb65a5f.gif" width="800" title="hover text">
+</p>
+
+</details>
 
 ### Saving to Comet
 
