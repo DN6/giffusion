@@ -1,7 +1,9 @@
 import importlib
+import pathlib
 
 import gradio as gr
 import torch
+from PIL import Image
 
 from generate import run
 from utils import (
@@ -61,10 +63,16 @@ def _get_video_frame_information(video_input):
     return "\n".join(["0: ", f"{max_frames - 1}: "]), gr.update(value=fps)
 
 
-def send_to_image_input(video, frame_id):
-    frames, _, _ = load_video_frames(video)
+def send_to_image_input(output, frame_id):
+    extension = pathlib.Path(output).suffix
+    if extension == "gif":
+        image = Image.open(output)
+        output_image = image.seek(frame_id)
+    else:
+        frames, _, _ = load_video_frames(output)
+        output_image = to_pil_image(frames[int(frame_id)])
 
-    return to_pil_image(frames[int(frame_id)])
+    return output_image
 
 
 def send_to_video_input(video):
@@ -146,12 +154,17 @@ with demo:
                 "Output Settings: Set output file format and FPS", open=False
             ):
                 with gr.Row():
-                    output_format = gr.Radio(
-                        ["gif", "mp4"], value="mp4", label="Output Format"
-                    )
-                    fps = gr.Slider(10, 60, step=1, value=10, label="Output Frame Rate")
+                    with gr.Column():
+                        with gr.Row():
+                            output_format = gr.Dropdown(
+                                ["gif", "mp4"], value="mp4", label="Output Format"
+                            )
+                        with gr.Row():
+                            fps = gr.Slider(
+                                10, 60, step=1, value=10, label="Output Frame Rate"
+                            )
 
-            with gr.Accordion("Diffusion Settings"):
+            with gr.Accordion("Diffusion Settings", open=False):
                 use_fixed_latent = gr.Checkbox(label="Use Fixed Init Latent")
                 use_prompt_embeds = gr.Checkbox(
                     label="Use Prompt Embeds", value=True, interactive=True
