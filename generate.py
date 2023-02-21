@@ -3,18 +3,14 @@ import os
 from datetime import datetime
 
 import typer
-from diffusers.schedulers import (
-    DDIMScheduler,
-    DDPMScheduler,
-    DEISMultistepScheduler,
-    DPMSolverSinglestepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    KDPM2AncestralDiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    RePaintScheduler,
-)
+from diffusers.schedulers import (DDIMScheduler, DDPMScheduler,
+                                  DEISMultistepScheduler,
+                                  DPMSolverSinglestepScheduler,
+                                  EulerAncestralDiscreteScheduler,
+                                  EulerDiscreteScheduler,
+                                  KDPM2AncestralDiscreteScheduler,
+                                  LMSDiscreteScheduler, PNDMScheduler,
+                                  RePaintScheduler)
 from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
 
@@ -145,11 +141,11 @@ def run(
                 experiment.log_image(img_save_path, image_name="frame", step=frame_idx)
             frame_idx += 1
 
-    if output_format == "gif":
+    if output_format is "gif":
         output_filename = f"{run_path}/output.gif"
         save_gif(frames=output_frames, filename=output_filename, fps=fps)
 
-    if output_format == "mp4":
+    else:
         output_filename = f"{run_path}/output.mp4"
         save_video(
             frames=output_frames,
