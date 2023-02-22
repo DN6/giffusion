@@ -53,6 +53,8 @@ You can even provide a list of topics for the inspiration button to use as a sta
 
 ### Multimedia Support
 
+Augment the image generation process with additional media inputs
+
 <details>
 <summary>Image Input</summary>
 
@@ -148,6 +150,8 @@ This section covers all the components in the Diffusion Settings dropdown.
 10. **Image Width:** By default, generated images will have a width of 512 pixels. Certain models and pipelines support generating higher resolution images. Adjust this setting to account for those configurations. If an Image or Video input is provided, the width is set to the width of the original input.
 
 11. **Number of Latent Channels:** This is used to set the channel dimension of the noise latent. Certain Pipelines, e.g. `InstructPix2Pix` require the number of latent channels to be different from the number of input channels of the Unet model. The default value of `4` should work for a majority of pipelines and models.
+
+12. **Additional Pipeline Arguments:** Diffuser Pipelines support a wide variety of arguments depending on the task. Use this textbox to input a dictionary of values that will be passed to the pipeline object as keyword arguments. e.g. Passing the Image Guidance Scale parameter to the InstructPix2PixPipeline
 
 ## Output Settings
 

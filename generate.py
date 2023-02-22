@@ -3,14 +3,18 @@ import os
 from datetime import datetime
 
 import typer
-from diffusers.schedulers import (DDIMScheduler, DDPMScheduler,
-                                  DEISMultistepScheduler,
-                                  DPMSolverSinglestepScheduler,
-                                  EulerAncestralDiscreteScheduler,
-                                  EulerDiscreteScheduler,
-                                  KDPM2AncestralDiscreteScheduler,
-                                  LMSDiscreteScheduler, PNDMScheduler,
-                                  RePaintScheduler)
+from diffusers.schedulers import (
+    DDIMScheduler,
+    DDPMScheduler,
+    DEISMultistepScheduler,
+    DPMSolverSinglestepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    KDPM2AncestralDiscreteScheduler,
+    LMSDiscreteScheduler,
+    PNDMScheduler,
+    RePaintScheduler,
+)
 from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
 
@@ -65,6 +69,7 @@ def run(
     video_input=None,
     output_format="mp4",
     model_name="runwayml/stable-diffusion-v1-5",
+    additional_pipeline_arguments="{}",
 ):
     if pipe is None:
         raise ValueError(
@@ -122,6 +127,7 @@ def run(
         seed=seed,
         batch_size=batch_size,
         fps=fps,
+        additional_pipeline_arguments=additional_pipeline_arguments,
     )
 
     max_frames = flow.max_frames
@@ -141,7 +147,7 @@ def run(
                 experiment.log_image(img_save_path, image_name="frame", step=frame_idx)
             frame_idx += 1
 
-    if output_format is "gif":
+    if output_format == "gif":
         output_filename = f"{run_path}/output.gif"
         save_gif(frames=output_frames, filename=output_filename, fps=fps)
 

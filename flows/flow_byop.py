@@ -1,4 +1,5 @@
 import inspect
+import json
 import random
 
 import librosa
@@ -32,6 +33,7 @@ class BYOPFlow(BaseFlow):
         batch_size=1,
         fps=10,
         negative_prompts="",
+        additional_pipeline_arguments="{}",
     ):
         super().__init__(pipe, device, batch_size)
 
@@ -44,6 +46,7 @@ class BYOPFlow(BaseFlow):
         self.use_prompt_embeds = use_prompt_embeds
         self.num_latent_channels = num_latent_channels
         self.vae_scale_factor = self.pipe.vae_scale_factor
+        self.additional_pipeline_argumenets = json.loads(additional_pipeline_arguments)
 
         self.guidance_scale = guidance_scale
         self.num_inference_steps = num_inference_steps
@@ -302,6 +305,8 @@ class BYOPFlow(BaseFlow):
 
         if "generator" in self.pipe_signature:
             pipe_kwargs.update({"generator": self.generator.manual_seed(self.seed)})
+
+        pipe_kwargs.update(self.additional_pipeline_argumenets)
 
         return pipe_kwargs
 

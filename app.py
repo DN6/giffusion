@@ -101,6 +101,7 @@ def predict(
     video_input,
     output_format,
     model_name,
+    additional_pipeline_arguments,
 ):
     output = run(
         pipe=pipe,
@@ -124,6 +125,7 @@ def predict(
         video_input=video_input,
         output_format=output_format,
         model_name=model_name,
+        additional_pipeline_arguments=additional_pipeline_arguments,
     )
 
     return output
@@ -209,6 +211,16 @@ with demo:
                 num_latent_channels = gr.Number(
                     value=4, label="Number of Latent Channels"
                 )
+
+                with gr.Accordion("Additional Pipeline Arguments", open=False):
+                    additional_pipeline_arguments = gr.Textbox(
+                        label="",
+                        value="{}",
+                        interactive=True,
+                        lines=4,
+                        placeholder="A dictionary of key word arguments to pass to the pipeline",
+                    )
+
             with gr.Accordion("Inspiration Settings", open=False):
                 with gr.Row():
                     topics = gr.Textbox(lines=1, value="", label="Inspiration Topics")
@@ -315,6 +327,7 @@ with demo:
             video_input,
             output_format,
             model_name,
+            additional_pipeline_arguments,
         ],
         outputs=output,
     )
