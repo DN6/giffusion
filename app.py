@@ -60,7 +60,7 @@ def _get_audio_key_frame_information(audio_input, fps, audio_component):
 def _get_video_frame_information(video_input):
     max_frames, fps = get_video_frame_information(video_input)
 
-    return "\n".join(["0: ", f"{max_frames - 1}: "]), gr.update(value=fps)
+    return "\n".join(["0: ", f"{max_frames - 1}: "]), gr.update(value=int(fps))
 
 
 def send_to_image_input(output, frame_id):
@@ -152,9 +152,7 @@ with demo:
                         with gr.Row():
                             load_message = gr.Markdown()
 
-            with gr.Accordion(
-                "Output Settings: Set output file format and FPS", open=False
-            ):
+            with gr.Accordion("Output Settings: Set output file format and FPS"):
                 with gr.Row():
                     with gr.Column():
                         with gr.Row():
