@@ -97,7 +97,7 @@ def run(
             "use_prompt_embeds": use_prompt_embeds,
             "audio_component": audio_component,
             "output_format": output_format,
-            "pipeline_name": pipe.config["_class_name"],
+            "pipeline_name": pipe.__class__.__name__,
             "model_name": model_name,
         }
         if (video_input is not None) or (image_input is not None):
