@@ -1,5 +1,5 @@
 transformers
-diffusers
+diffusers @ git+https://github.com/huggingface/diffusers.git
 accelerate
 typer
 av<10.0.0
