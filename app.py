@@ -170,6 +170,7 @@ with demo:
                     label="Use Prompt Embeds", value=True, interactive=True
                 )
                 seed = gr.Number(value=42, label="Numerical Seed")
+                batch_size = gr.Slider(1, 64, step=1, value=1, label="Batch Size")
                 num_iteration_steps = gr.Slider(
                     10,
                     1000,
@@ -203,7 +204,6 @@ with demo:
                     value="deis",
                     label="Scheduler",
                 )
-                batch_size = gr.Slider(1, 64, step=1, value=1, label="Batch Size")
                 image_height = gr.Number(value=512, label="Image Height")
                 image_width = gr.Number(value=512, label="Image Width")
                 num_latent_channels = gr.Number(
