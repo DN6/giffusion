@@ -1,4 +1,9 @@
-# GIFfusion
+# GIFfusion 💥
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220882002-72cbfdef-876a-4cb2-9f41-e5989e769868.gif" width="256" title="hover text">
+</p>
+
 Giffusion is a Web UI for generating GIFs and Videos using Stable Diffusion.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DN6/giffusion/blob/main/Giffusion.ipynb)
@@ -60,6 +65,12 @@ Augment the image generation process with additional media inputs
 
 You can seed the generation process with an inital image. Upload your file using the, using the `Image Input` dropdown.
 
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220880564-dba393c5-6023-4539-a59c-c33758769500.gif" width="800" title="hover text">
+</p>
+<p align="center">
+<a align="center" href="https://www.krea.ai/prompt/184bf3cf-ec0d-4ff8-b4f1-45577799700b">Image Source</a>
+</p>
 </details>
 
 <details>
