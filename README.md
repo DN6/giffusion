@@ -1,10 +1,24 @@
-# GIFfusion
+# GIFfusion 💥
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220882002-72cbfdef-876a-4cb2-9f41-e5989e769868.gif" width="256" title="hover text">
+</p>
+
 Giffusion is a Web UI for generating GIFs and Videos using Stable Diffusion.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DN6/giffusion/blob/main/Giffusion.ipynb)
 [![Open In Comet](https://custom-icon-badges.herokuapp.com/badge/comet__ml-Open_In_Comet-orange?logo=logo_comet_ml)](https://www.comet.com/team-comet-ml/giffusion/view/CzxqbNrydKqHCaYhNEnbyrpnz/panels?utm_source=tds&utm_medium=social&utm_campaign=stable_diffusion)
 
 ## Features
+
+### Bring Your Own Pipeline
+
+Giffusion supports using any pipeline and compatible checkpoint from the [Diffusers](https://huggingface.co/docs/diffusers/index) library. Simply paste in the checkpoint name and pipeline name in the `Pipeline Settings`
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220323500-ae12c752-9cfe-441e-ba03-22a0ea787139.gif" width="800" title="hover text">
+</p>
+
 
 ### Multiframe Generation
 
@@ -23,58 +37,98 @@ You might recall that Diffusion Models work by turning noise into images. Stable
 
 The inputs to our model are a noise tensor and text embedding tensor. Using our key frames as our start and end points, we can produce images in between these frames by interpolating these tensors.
 
-![output-corgi-final](https://user-images.githubusercontent.com/7529846/204506200-49f91bd1-396f-4cf1-927c-c91b885f5c4a.gif)
-
-### Composable Diffusion
-
-Giffusion supports [Composable Diffusion](https://energy-based-model.github.io/Compositional-Visual-Generation-with-Composable-Diffusion-Models/) for image generation.
-
-Composable diffusion tends to preserve the components of the individual prompts better than a single text prompt.
-
-To compose your prompts, simply separate them using a '|'. For example
-
-```
-0: A red house | a lightning storm
-60: A red house | a sunny day
-```
-
-![red-house-final](https://user-images.githubusercontent.com/7529846/204506605-f1d89d99-9449-4ba6-82e0-3cc2a1f863c6.gif)
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/204506200-49f91bd1-396f-4cf1-927c-c91b885f5c4a.gif" width="256" title="hover text">
+</p>
 
 ### Inspiration Button
 
 Creating prompts can be challenging. Click the `Give me some inspiration` button to automatically generate prompts for you.
 
-https://user-images.githubusercontent.com/7529846/204581619-d9f3a550-9f0c-4b4b-9783-b558e6ebf109.mp4
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220324203-444c1720-c71b-4ccf-b08f-5b20668b7f98.gif" width="800" title="hover text">
+</p>
 
 You can even provide a list of topics for the inspiration button to use as a starting point.
 
-https://user-images.githubusercontent.com/7529846/204581713-d94f28b3-b7c9-4ad4-8bc3-b287ac849968.mp4
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220324835-fbbae3be-9a9a-48f9-a773-5e45c6274ed2.gif" width="800" title="hover text">
+</p>
 
-### Audio Reactive Videos
+
+### Multimedia Support
+
+Augment the image generation process with additional media inputs
+
+<details>
+<summary>Image Input</summary>
+
+You can seed the generation process with an inital image. Upload your file using the, using the `Image Input` dropdown.
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220880564-dba393c5-6023-4539-a59c-c33758769500.gif" width="800" title="hover text">
+</p>
+<p align="center">
+<a align="center" href="https://www.krea.ai/prompt/184bf3cf-ec0d-4ff8-b4f1-45577799700b">Image Source</a>
+</p>
+</details>
+
+<details>
+<summary>Audio Input</summary>
 
 Drive your GIF and Video animations using audio.
 
 https://user-images.githubusercontent.com/7529846/204550897-70777873-30ca-46a9-a74e-65b6ef429958.mp4
 
-In order to use audio, head over to the Audio Settings tab and upload your audio file. Then click `Get Key Frame Information`. This will extract key frames from the audio based on the `Audio Component` you have selected. You can extract key frames from the percussive, harmonic or combined audio components of your file.
+In order to use audio to drive your animations,
 
-Additionally, timestamp informtion for these key frames is also extracted to the text input box for reference in case you would like to sync your prompts to a particular time in the audio.
+1. Head over to the `Audio Input` dropdown and upload your audio file.
+2. Click `Get Key Frame Information`. This will extract key frames from the audio based on the `Audio Component` you have selected. You can extract key frames based on the percussive, harmonic or combined audio components of your file.
+
+Additionally, timestamp information for these key frames is also extracted for reference in case you would like to sync your prompts to a particular time in the audio.
 
 **Note:** The key frames will change based the frame rate that you have set in the UI.
+</details>
 
-https://user-images.githubusercontent.com/7529846/204581783-7fa9ad83-baf2-4293-99e1-9315d6b557c9.mp4
-
-### Video Initialization
+<details>
+<summary>Video Input</summary>
 
 You can use frames from an existing video as initial images in the diffusion process.
 
 https://user-images.githubusercontent.com/7529846/204550451-5d2162dc-5d6b-4ecd-b1ed-c15cb56bc224.mp4
 
-To use video initialization, head over to the Video Setting tab and upload your file. Click `Get Key Frame Information` to extract the maximum number of frames present in the video and to update the frame rate in the UI to match the frame rate of the input video.
+To use video initialization:
 
-The `Strength` parameter controls how well your original video content is preserved by the diffusion process. Setting higher values (greater than 0.5) will lead to source image semantics being ignored.
+1. Head over to the `Video Input` dropdown
 
-https://user-images.githubusercontent.com/7529846/204581841-3fa20dd5-7cff-4ec1-aacf-2cb2bfe476b4.mp4
+2. Upload your file. Click `Get Key Frame Information` to extract the maximum number of frames present in the video and to update the frame rate setting in the UI to match the frame rate of the input video.
+
+</details>
+
+#### Resampling Output Generations
+
+You can resample videos and GIFs created in the output tab and send them either to the Image Input or Video Input.
+
+<details>
+<summary>Resampling to Image Input</summary>
+
+To sample an image from a video, select the frame id you want to sample from your output video or GIF and click on `Send to Image Input`
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220325938-22438722-d4ac-4a35-995f-51d8dbafaa34.gif" width="800" title="hover text">
+</p>
+</details>
+
+<details>
+<summary>Resampling to Video Input</summary>
+
+To resample a video, click on `Send to Video Input`
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/220322852-f2fab800-43dc-41b8-bdb4-c4057bb65a5f.gif" width="800" title="hover text">
+</p>
+
+</details>
 
 ### Saving to Comet
 
@@ -82,10 +136,44 @@ GIFfusion also support saving prompts, generated GIFs/Videos, images, and settin
 
 [Check out an example project here with some of my GIFs!](https://www.comet.com/team-comet-ml/giffusion?shareable=Jf4go5RcGqryr6wq1uBudgVVS)
 
-### Additional Resources
+## Diffusion Settings
+
+This section covers all the components in the Diffusion Settings dropdown.
+
+1. **Use Fixed Latent:** Use the same noise latent for every frame of the generation process. This is useful if you want to keep the noise latent fixed while interpolating over just the prompt embeddings.
+
+2. **Use Prompt Embeds:** By default, Giffusion converts your prompts into embeddings and interpolates between the prompt embeddings for the in between frames. If you disable this option, Giffusion will forward fill the text prompts between frames instead. If you are using the `ComposableDiffusion` pipeline or would like to use the prompt embedding function of the pipeline directly, disable this option.
+
+3. **Numerical Seed:** Seed for the noise latent generation process. If `Use Fixed Latent` isn't set, this seed is used to generate a schedule that provides a unique seed for each key frame.
+
+4. **Number of Iteration Steps:** Number of steps to use in the generation process.
+
+5. **Classifier Free Guidance Scale:** Higher guidance scale encourages generated images that are closely linked to the text prompt, usually at the expense of lower image quality.
+
+6. **Image Strength:** Indicates how much to transform the reference image. Must be between 0 and 1. The image will be used as a starting point, adding more noise to it larger the strength. This is only applicable to Pipelines that support images as inputs.
+
+7. **Scheduler:**  Schedulers take in the output of a trained model, a sample which the diffusion process is iterating on, and a timestep to return a denoised sample. The different schedulers require a different number of iteration steps to produce good results. Use this selector to experiment with different schedulers and pipelines.
+
+8. **Batch Size:** Set the batch size used in the generation process. If you have access to a GPU with more memory, increase the batch size to increase the speed of the generation process.
+
+9. **Image Height:** By default, generated images will have a height of 512 pixels. Certain models and pipelines support generating higher resolution images. Adjust this setting to account for those configurations. If an Image or Video input is provided, the height is set to the height of the original input.
+
+10. **Image Width:** By default, generated images will have a width of 512 pixels. Certain models and pipelines support generating higher resolution images. Adjust this setting to account for those configurations. If an Image or Video input is provided, the width is set to the width of the original input.
+
+11. **Number of Latent Channels:** This is used to set the channel dimension of the noise latent. Certain Pipelines, e.g. `InstructPix2Pix` require the number of latent channels to be different from the number of input channels of the Unet model. The default value of `4` should work for a majority of pipelines and models.
+
+12. **Additional Pipeline Arguments:** Diffuser Pipelines support a wide variety of arguments depending on the task. Use this textbox to input a dictionary of values that will be passed to the pipeline object as keyword arguments. e.g. Passing the Image Guidance Scale parameter to the InstructPix2PixPipeline
+
+## Output Settings
+
+1. **Output Format:** Set the output format to either be a GIF or an MP4 video.
+2. **Frame Rate:** Set the frame rate for the output.
+
+## References
 
 1. Prompt format is based on the work from [Deforum Art](https://deforum.github.io/)
 2. Inspiration Button uses the [Midjourney Prompt Generator](https://huggingface.co/spaces/doevent/prompt-generator) Space by DoEvent 
 3. [Stable Diffusion Videos with Audio Reactivity](https://github.com/nateraw/stable-diffusion-videos)
 4. [Comet ML Project with some of the things made with Giffusion](https://www.comet.com/team-comet-ml/giffusion/view/CzxqbNrydKqHCaYhNEnbyrpnz/panels?utm_source=tds&utm_medium=social&utm_campaign=stable_diffusion)
 5. [Gradio Docs](https://gradio.app/docs/): The UI for this project is built with Gradio.
+6. [Hugging Face Diffusers](https://huggingface.co/docs/diffusers/index)

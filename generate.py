@@ -2,56 +2,57 @@ import logging
 import os
 from datetime import datetime
 
-import torch
 import typer
-from diffusers import StableDiffusionPipeline
-from diffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
-from torch import autocast
-from torchvision import transforms as T
+from diffusers.schedulers import (
+    DDIMScheduler,
+    DDPMScheduler,
+    DEISMultistepScheduler,
+    DPMSolverSinglestepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    KDPM2AncestralDiscreteScheduler,
+    LMSDiscreteScheduler,
+    PNDMScheduler,
+    RePaintScheduler,
+)
+from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
 
 from comet import start_experiment
-from flows import AudioReactiveFlow, GiffusionFlow, VideoInitFlow
+from flows import BYOPFlow
+from flows.flow_byop import BYOPFlow
 from utils import save_gif, save_video
 
 logger = logging.getLogger(__name__)
 
-
-PRETRAINED_MODEL_NAME = os.getenv(
-    "PRETRAINED_MODEL_NAME", "CompVis/stable-diffusion-v1-4"
-)
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-pipe = StableDiffusionPipeline.from_pretrained(
-    PRETRAINED_MODEL_NAME, use_auth_token=True
-)
-pipe.enable_attention_slicing()
-pipe.to(device)
+# Disable denoising progress bar
+disable_progress_bar()
 
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "../generated")
 
-SCHEDULERS = dict(
-    pndms=PNDMScheduler(
-        beta_start=0.00085,
-        beta_end=0.012,
-        beta_schedule="scaled_linear",
-        skip_prk_steps=True,
-    ),
-    ddim=DDIMScheduler(
-        beta_start=0.00085,
-        beta_end=0.012,
-        beta_schedule="scaled_linear",
-        clip_sample=False,
-        set_alpha_to_one=False,
-    ),
-    klms=LMSDiscreteScheduler(
-        beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
-    ),
-)
+
+def load_scheduler(scheduler, **kwargs):
+    scheduler_map = dict(
+        pndms=PNDMScheduler(**kwargs),
+        ddim=DDIMScheduler(**kwargs),
+        ddpm=DDPMScheduler(**kwargs),
+        klms=LMSDiscreteScheduler(**kwargs),
+        dpm=DPMSolverSinglestepScheduler(**kwargs),
+        dpm_ads=KDPM2AncestralDiscreteScheduler(**kwargs),
+        deis=DEISMultistepScheduler(**kwargs),
+        euler=EulerDiscreteScheduler(**kwargs),
+        euler_ads=EulerAncestralDiscreteScheduler(**kwargs),
+        repaint=RePaintScheduler(**kwargs),
+    )
+    return scheduler_map.get(scheduler)
 
 
 def run(
+    pipe,
     text_prompt_inputs,
+    negative_prompt_inputs,
+    height=512,
+    width=512,
     num_inference_steps=50,
     guidance_scale=7.5,
     strength=1.0,
@@ -60,11 +61,20 @@ def run(
     fps=24,
     scheduler="pndms",
     use_fixed_latent=False,
+    use_prompt_embeds=True,
+    num_latent_channels=4,
     audio_input=None,
     audio_component="both",
+    image_input=None,
     video_input=None,
-    output_format="gif",
+    output_format="mp4",
+    model_name="runwayml/stable-diffusion-v1-5",
+    additional_pipeline_arguments="{}",
 ):
+    if pipe is None:
+        raise ValueError(
+            "Pipline object has not been created. Please load a Pipline before submitting a run"
+        )
 
     experiment = start_experiment()
 
@@ -72,75 +82,53 @@ def run(
     run_path = os.path.join(OUTPUT_BASE_PATH, run_name)
     os.makedirs(run_path, exist_ok=True)
 
+    device = pipe.device
+
     if experiment:
         parameters = {
             "text_prompt_inputs": text_prompt_inputs,
+            "negative_prompt_inputs": negative_prompt_inputs,
             "num_inference_steps": num_inference_steps,
             "guidance_scale": guidance_scale,
             "scheduler": scheduler,
             "seed": seed,
             "fps": fps,
             "use_fixed_latent": use_fixed_latent,
+            "use_prompt_embeds": use_prompt_embeds,
             "audio_component": audio_component,
             "output_format": output_format,
-            "model_name": PRETRAINED_MODEL_NAME,
+            "pipeline_name": pipe.__class__.__name__,
+            "model_name": model_name,
         }
-        if video_input is not None:
+        if (video_input is not None) or (image_input is not None):
             parameters.update({"strength": strength})
+
         experiment.log_parameters(parameters)
 
-    pipe.scheduler = SCHEDULERS.get(scheduler)
-
-    if audio_input is not None:
-        if experiment:
-            experiment.log_asset(audio_input)
-
-        flow = AudioReactiveFlow(
-            pipe=pipe,
-            text_prompts=text_prompt_inputs,
-            audio_input=audio_input,
-            audio_component=audio_component,
-            guidance_scale=guidance_scale,
-            num_inference_steps=num_inference_steps,
-            height=512,
-            width=512,
-            device=device,
-            fps=fps,
-            use_fixed_latent=use_fixed_latent,
-            seed=seed,
-            batch_size=batch_size,
-        )
-    elif video_input is not None:
-        if experiment:
-            experiment.log_asset(video_input)
-
-        flow = VideoInitFlow(
-            pipe=pipe,
-            text_prompts=text_prompt_inputs,
-            video_input=video_input,
-            guidance_scale=guidance_scale,
-            strength=strength,
-            num_inference_steps=num_inference_steps,
-            device=device,
-            fps=fps,
-            use_fixed_latent=use_fixed_latent,
-            batch_size=batch_size,
-            seed=seed,
-        )
-
-    else:
-        flow = GiffusionFlow(
-            pipe=pipe,
-            text_prompts=text_prompt_inputs,
-            guidance_scale=guidance_scale,
-            num_inference_steps=num_inference_steps,
-            height=512,
-            width=512,
-            device=device,
-            use_fixed_latent=use_fixed_latent,
-            batch_size=batch_size,
-            seed=seed,
-        )
+    pipe.scheduler = load_scheduler(
+        scheduler, beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
+    )
+    flow = BYOPFlow(
+        pipe=pipe,
+        text_prompts=text_prompt_inputs,
+        negative_prompts=negative_prompt_inputs,
+        guidance_scale=guidance_scale,
+        num_inference_steps=num_inference_steps,
+        height=height,
+        width=width,
+        use_fixed_latent=use_fixed_latent,
+        use_prompt_embeds=use_prompt_embeds,
+        num_latent_channels=num_latent_channels,
+        device=device,
+        image_input=image_input,
+        audio_input=audio_input,
+        audio_component=audio_component,
+        video_input=video_input,
+        seed=seed,
+        batch_size=batch_size,
+        fps=fps,
+        additional_pipeline_arguments=additional_pipeline_arguments,
+    )
 
     max_frames = flow.max_frames
     output_frames = []
@@ -148,7 +136,8 @@ def run(
     image_generator = flow.create()
     frame_idx = 0
 
-    for images in tqdm(image_generator, total=max_frames // flow.batch_size):
+    for output in tqdm(image_generator, total=max_frames // flow.batch_size):
+        images = output.images
         for image in images:
             img_save_path = f"{run_path}/{frame_idx:04d}.png"
             image.save(img_save_path)
@@ -162,12 +151,8 @@ def run(
         output_filename = f"{run_path}/output.gif"
         save_gif(frames=output_frames, filename=output_filename, fps=fps)
 
-        preview_filename = f"{run_path}/output-preview.gif"
-        save_gif(frames=output_frames, filename=preview_filename, fps=fps, quality=35)
-
-    if output_format == "mp4":
+    else:
         output_filename = f"{run_path}/output.mp4"
-
         save_video(
             frames=output_frames,
             filename=output_filename,
@@ -175,20 +160,10 @@ def run(
             audio_input=audio_input,
         )
 
-        preview_filename = f"{run_path}/output-preview.mp4"
-        save_video(
-            frames=output_frames,
-            filename=preview_filename,
-            fps=fps,
-            quality=35,
-            audio_input=audio_input,
-        )
-
     if experiment:
         experiment.log_asset(output_filename)
-        experiment.log_asset(preview_filename)
 
-    return preview_filename
+    return output_filename
 
 
 if __name__ == "__main__":
