@@ -79,6 +79,13 @@ def send_to_video_input(video):
     return video
 
 
+def display_sin_parameters(value):
+    if value == "sine":
+        return gr.update(visible=True)
+    else:
+        return gr.update(visible=False)
+
+
 def predict(
     pipe,
     text_prompt_input,
@@ -97,11 +104,14 @@ def predict(
     num_latent_channels,
     audio_input,
     audio_component,
+    mel_spectogram_reduce,
     image_input,
     video_input,
     output_format,
     model_name,
     additional_pipeline_arguments,
+    interpolation_type,
+    scale_factors,
 ):
     output = run(
         pipe=pipe,
@@ -121,11 +131,14 @@ def predict(
         num_latent_channels=int(num_latent_channels),
         audio_input=audio_input,
         audio_component=audio_component,
+        mel_spectogram_reduce=mel_spectogram_reduce,
         image_input=image_input,
         video_input=video_input,
         output_format=output_format,
         model_name=model_name,
         additional_pipeline_arguments=additional_pipeline_arguments,
+        interpolation_type=interpolation_type,
+        scale_factors=scale_factors,
     )
 
     return output
@@ -219,6 +232,11 @@ with demo:
                         placeholder="A dictionary of key word arguments to pass to the pipeline",
                     )
 
+            with gr.Accordion("Animation Settings", open=False):
+                interpolation_type = gr.Dropdown(["linear", "sine"], value="linear")
+                scale_factors = gr.Textbox("", label="Frequencies", visible=False)
+                interpolation_type.change([interpolation_type], [scale_factors])
+
             with gr.Accordion("Inspiration Settings", open=False):
                 with gr.Row():
                     topics = gr.Textbox(lines=1, value="", label="Inspiration Topics")
@@ -264,6 +282,11 @@ with demo:
                     label="Audio Component",
                 )
                 audio_info_btn = gr.Button(value="Get Key Frame Information")
+                mel_spectogram_reduce = gr.Dropdown(
+                    ["mean", "median", "max"],
+                    label="Mel Spectrogram Reduction",
+                    value="max",
+                )
 
             with gr.Accordion("Video Input", open=False):
                 video_input = gr.Video(label="Video Input")
@@ -321,11 +344,14 @@ with demo:
             num_latent_channels,
             audio_input,
             audio_component,
+            mel_spectogram_reduce,
             image_input,
             video_input,
             output_format,
             model_name,
             additional_pipeline_arguments,
+            interpolation_type,
+            scale_factors,
         ],
         outputs=output,
     )

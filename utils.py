@@ -49,6 +49,10 @@ def get_audio_key_frame_information(audio_input, fps, audio_component):
     return audio_key_frames
 
 
+def get_mel_reduce_func(reduce_name):
+    return {"max": np.amax, "median": np.median, "mean": np.mean}.get(reduce_name)
+
+
 def get_video_frame_information(video_input):
     video_frames, audio, metadata = load_video_frames(video_input)
     n_frames = len(video_frames)

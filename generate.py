@@ -65,11 +65,14 @@ def run(
     num_latent_channels=4,
     audio_input=None,
     audio_component="both",
+    mel_spectogram_reduce="max",
     image_input=None,
     video_input=None,
     output_format="mp4",
     model_name="runwayml/stable-diffusion-v1-5",
     additional_pipeline_arguments="{}",
+    interpolation_type="linear",
+    scale_factors="",
 ):
     if pipe is None:
         raise ValueError(
@@ -123,11 +126,14 @@ def run(
         image_input=image_input,
         audio_input=audio_input,
         audio_component=audio_component,
+        audio_mel_spectogram_reduce=mel_spectogram_reduce,
         video_input=video_input,
         seed=seed,
         batch_size=batch_size,
         fps=fps,
         additional_pipeline_arguments=additional_pipeline_arguments,
+        interpolation_type=interpolation_type,
+        scale_factors=scale_factors,
     )
 
     max_frames = flow.max_frames
