@@ -79,7 +79,7 @@ def send_to_video_input(video):
     return video
 
 
-def display_sin_parameters(value):
+def display_sine_parameters(value):
     if value == "sine":
         return gr.update(visible=True)
     else:
@@ -111,7 +111,7 @@ def predict(
     model_name,
     additional_pipeline_arguments,
     interpolation_type,
-    scale_factors,
+    frequencies,
 ):
     output = run(
         pipe=pipe,
@@ -138,7 +138,7 @@ def predict(
         model_name=model_name,
         additional_pipeline_arguments=additional_pipeline_arguments,
         interpolation_type=interpolation_type,
-        scale_factors=scale_factors,
+        frequencies=frequencies,
     )
 
     return output
@@ -234,8 +234,10 @@ with demo:
 
             with gr.Accordion("Animation Settings", open=False):
                 interpolation_type = gr.Dropdown(["linear", "sine"], value="linear")
-                scale_factors = gr.Textbox("", label="Frequencies", visible=False)
-                interpolation_type.change([interpolation_type], [scale_factors])
+                frequencies = gr.Textbox("", label="Frequencies", visible=False)
+                interpolation_type.change(
+                    display_sine_parameters, [interpolation_type], [frequencies]
+                )
 
             with gr.Accordion("Inspiration Settings", open=False):
                 with gr.Row():
@@ -351,7 +353,7 @@ with demo:
             model_name,
             additional_pipeline_arguments,
             interpolation_type,
-            scale_factors,
+            frequencies,
         ],
         outputs=output,
     )

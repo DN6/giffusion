@@ -72,7 +72,7 @@ def run(
     model_name="runwayml/stable-diffusion-v1-5",
     additional_pipeline_arguments="{}",
     interpolation_type="linear",
-    scale_factors="",
+    frequencies="",
 ):
     if pipe is None:
         raise ValueError(
@@ -133,7 +133,7 @@ def run(
         fps=fps,
         additional_pipeline_arguments=additional_pipeline_arguments,
         interpolation_type=interpolation_type,
-        scale_factors=scale_factors,
+        frequencies=frequencies,
     )
 
     max_frames = flow.max_frames

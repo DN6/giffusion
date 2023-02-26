@@ -42,16 +42,16 @@ class BYOPFlow(BaseFlow):
         negative_prompts="",
         additional_pipeline_arguments="{}",
         interpolation_type="linear",
-        scale_factors="",
+        frequencies="",
     ):
         super().__init__(pipe, device, batch_size)
 
         self.pipe_signature = set(inspect.signature(self.pipe).parameters.keys())
 
-        scale_factors = scale_factors.split(",")
+        frequencies = frequencies.split(",")
         interpolation_config = {
             "interpolation_type": interpolation_type,
-            "scale_factors": scale_factors,
+            "frequencies": frequencies,
         }
 
         self.text_prompts = text_prompts
@@ -137,29 +137,28 @@ class BYOPFlow(BaseFlow):
             )
 
         if interpolation_config["interpolation_type"] == "sine":
-            return get_sine_interpolation_schedule(
-                start_frame, end_frame, scale_factors
+            frequencies = interpolation_config["frequencies"]
+            return self.get_sine_interpolation_schedule(
+                start_frame, end_frame, frequencies
             )
 
         num_frames = (end_frame - start_frame) + 1
 
         return np.linspace(0, 1, num_frames)
 
-    def get_sine_interpolation_schedule(self, start_frame, end_frame, scale_factors):
+    def get_sine_interpolation_schedule(self, start_frame, end_frame, frequencies):
         output = []
         num_frames = (end_frame - start_frame) + 1
-        frames = np.arange(num_frames)
+        frames = np.arange(num_frames) / num_frames
 
-        if len(scale_factors) == 0:
-            scale_factors = [num_frames]
+        if len(frequencies) == 0:
+            frequencies = [1.0]
         else:
-            scale_factors = list(map(lambda x: float(x), scale_factors))
+            frequencies = list(map(lambda x: float(x), frequencies))
 
-        def sin_curve(frames, scale_factor):
-            return (np.sin(frames / scale_factor)) ** 2
-
-        for sf in scale_factors:
-            output.append(sin_curve(frames, sf))
+        for frequency in frequencies:
+            curve = np.sin(np.pi * frames * frequency) ** 2
+            output.append(curve)
 
         schedule = sum(output)
         schedule = (schedule - np.min(schedule)) / np.ptp(schedule)
