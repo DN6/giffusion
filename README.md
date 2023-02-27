@@ -177,3 +177,4 @@ This section covers all the components in the Diffusion Settings dropdown.
 4. [Comet ML Project with some of the things made with Giffusion](https://www.comet.com/team-comet-ml/giffusion/view/CzxqbNrydKqHCaYhNEnbyrpnz/panels?utm_source=tds&utm_medium=social&utm_campaign=stable_diffusion)
 5. [Gradio Docs](https://gradio.app/docs/): The UI for this project is built with Gradio.
 6. [Hugging Face Diffusers](https://huggingface.co/docs/diffusers/index)
+7. [Keyframed](https://github.com/dmarx/keyframed) for curve interpolation

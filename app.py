@@ -79,8 +79,8 @@ def send_to_video_input(video):
     return video
 
 
-def display_sine_parameters(value):
-    if value == "sine":
+def display_interpolation_args(value):
+    if value != "linear":
         return gr.update(visible=True)
     else:
         return gr.update(visible=False)
@@ -111,7 +111,7 @@ def predict(
     model_name,
     additional_pipeline_arguments,
     interpolation_type,
-    frequencies,
+    interpolation_args,
 ):
     output = run(
         pipe=pipe,
@@ -138,7 +138,7 @@ def predict(
         model_name=model_name,
         additional_pipeline_arguments=additional_pipeline_arguments,
         interpolation_type=interpolation_type,
-        frequencies=frequencies,
+        interpolation_args=interpolation_args,
     )
 
     return output
@@ -233,10 +233,16 @@ with demo:
                     )
 
             with gr.Accordion("Animation Settings", open=False):
-                interpolation_type = gr.Dropdown(["linear", "sine"], value="linear")
-                frequencies = gr.Textbox("", label="Frequencies", visible=False)
+                interpolation_type = gr.Dropdown(
+                    ["linear", "sine", "curve"], value="linear"
+                )
+                interpolation_args = gr.Textbox(
+                    "", label="Interpolation Arguments", visible=False
+                )
                 interpolation_type.change(
-                    display_sine_parameters, [interpolation_type], [frequencies]
+                    display_interpolation_args,
+                    [interpolation_type],
+                    [interpolation_args],
                 )
 
             with gr.Accordion("Inspiration Settings", open=False):
@@ -251,7 +257,7 @@ with demo:
                     )
 
         with gr.Column(elem_id="output", scale=2):
-            output = gr.Video(label="Model Output", elem_id="output")
+            output = gr.Video(label="Model Output", elem_id="output", interactive=False)
             submit = gr.Button(
                 label="Submit",
                 value="Create",
@@ -353,7 +359,7 @@ with demo:
             model_name,
             additional_pipeline_arguments,
             interpolation_type,
-            frequencies,
+            interpolation_args,
         ],
         outputs=output,
     )

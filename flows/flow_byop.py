@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import torch
 from utils import (
+    curve_from_cn_string,
     get_mel_reduce_func,
     load_video_frames,
     parse_key_frames,
@@ -42,17 +43,11 @@ class BYOPFlow(BaseFlow):
         negative_prompts="",
         additional_pipeline_arguments="{}",
         interpolation_type="linear",
-        frequencies="",
+        interpolation_args="",
     ):
         super().__init__(pipe, device, batch_size)
 
         self.pipe_signature = set(inspect.signature(self.pipe).parameters.keys())
-
-        frequencies = frequencies.split(",")
-        interpolation_config = {
-            "interpolation_type": interpolation_type,
-            "frequencies": frequencies,
-        }
 
         self.text_prompts = text_prompts
         self.negative_prompts = negative_prompts
@@ -109,6 +104,10 @@ class BYOPFlow(BaseFlow):
             random.randint(0, 18446744073709551615) for i in range(self.max_frames)
         ]
 
+        interpolation_config = {
+            "interpolation_type": interpolation_type,
+            "interpolation_args": interpolation_args,
+        }
         self.init_latents = self.get_init_latents(key_frames, interpolation_config)
         if self.use_prompt_embeds:
             self.prompts = self.get_prompt_embeddings(key_frames, interpolation_config)
@@ -137,26 +136,35 @@ class BYOPFlow(BaseFlow):
             )
 
         if interpolation_config["interpolation_type"] == "sine":
-            frequencies = interpolation_config["frequencies"]
+            interpolation_args = interpolation_config["interpolation_args"]
             return self.get_sine_interpolation_schedule(
-                start_frame, end_frame, frequencies
+                start_frame, end_frame, interpolation_args
+            )
+
+        if interpolation_config["interpolation_type"] == "curve":
+            interpolation_args = interpolation_config["interpolation_args"]
+            return self.get_curve_interpolation_schedule(
+                start_frame, end_frame, interpolation_args
             )
 
         num_frames = (end_frame - start_frame) + 1
 
         return np.linspace(0, 1, num_frames)
 
-    def get_sine_interpolation_schedule(self, start_frame, end_frame, frequencies):
+    def get_sine_interpolation_schedule(
+        self, start_frame, end_frame, interpolation_args
+    ):
         output = []
         num_frames = (end_frame - start_frame) + 1
         frames = np.arange(num_frames) / num_frames
 
-        if len(frequencies) == 0:
-            frequencies = [1.0]
+        interpolation_args = interpolation_args.split(",")
+        if len(interpolation_args) == 0:
+            interpolation_args = [1.0]
         else:
-            frequencies = list(map(lambda x: float(x), frequencies))
+            interpolation_args = list(map(lambda x: float(x), interpolation_args))
 
-        for frequency in frequencies:
+        for frequency in interpolation_args:
             curve = np.sin(np.pi * frames * frequency) ** 2
             output.append(curve)
 
@@ -191,6 +199,16 @@ class BYOPFlow(BaseFlow):
         interp_schedule = np.interp(resized_schedule, schedule_x, schedule_y)
 
         return interp_schedule
+
+    def get_curve_interpolation_schedule(
+        self, start_frame, end_frame, interpolation_args
+    ):
+        curve = curve_from_cn_string(interpolation_args)
+        curve_params = []
+        for frame in range(start_frame, end_frame + 1):
+            curve_params.append(curve[frame])
+
+        return np.array(curve_params)
 
     @torch.no_grad()
     def get_prompt_embeddings(self, key_frames, interpolation_config):
