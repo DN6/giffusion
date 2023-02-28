@@ -234,7 +234,9 @@ with demo:
 
             with gr.Accordion("Animation Settings", open=False):
                 interpolation_type = gr.Dropdown(
-                    ["linear", "sine", "curve"], value="linear"
+                    ["linear", "sine", "curve"],
+                    value="linear",
+                    label="Interpolation Type",
                 )
                 interpolation_args = gr.Textbox(
                     "", label="Interpolation Arguments", visible=False
