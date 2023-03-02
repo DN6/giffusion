@@ -55,7 +55,7 @@ def run(
     width=512,
     num_inference_steps=50,
     guidance_scale=7.5,
-    strength=1.0,
+    strength=0.5,
     batch_size=1,
     seed=42,
     fps=24,
@@ -73,6 +73,10 @@ def run(
     additional_pipeline_arguments="{}",
     interpolation_type="linear",
     interpolation_args="",
+    zoom="",
+    translate_x="",
+    translate_y="",
+    angle="",
 ):
     if pipe is None:
         raise ValueError(
@@ -111,12 +115,21 @@ def run(
     pipe.scheduler = load_scheduler(
         scheduler, beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
     )
+
+    animation_args = {
+        "zoom": zoom,
+        "translate_x": translate_x,
+        "translate_y": translate_y,
+        "angle": angle,
+    }
+
     flow = BYOPFlow(
         pipe=pipe,
         text_prompts=text_prompt_inputs,
         negative_prompts=negative_prompt_inputs,
         guidance_scale=guidance_scale,
         num_inference_steps=num_inference_steps,
+        strength=strength,
         height=height,
         width=width,
         use_fixed_latent=use_fixed_latent,
@@ -134,6 +147,7 @@ def run(
         additional_pipeline_arguments=additional_pipeline_arguments,
         interpolation_type=interpolation_type,
         interpolation_args=interpolation_args,
+        animation_args=animation_args,
     )
 
     max_frames = flow.max_frames

@@ -112,6 +112,10 @@ def predict(
     additional_pipeline_arguments,
     interpolation_type,
     interpolation_args,
+    zoom,
+    translate_x,
+    translate_y,
+    angle,
 ):
     output = run(
         pipe=pipe,
@@ -139,6 +143,10 @@ def predict(
         additional_pipeline_arguments=additional_pipeline_arguments,
         interpolation_type=interpolation_type,
         interpolation_args=interpolation_args,
+        zoom=zoom,
+        translate_x=translate_x,
+        translate_y=translate_y,
+        angle=angle,
     )
 
     return output
@@ -246,6 +254,11 @@ with demo:
                     [interpolation_type],
                     [interpolation_args],
                 )
+
+                zoom = gr.Textbox("", label="Zoom")
+                translate_x = gr.Textbox("", label="Translate_X")
+                translate_y = gr.Textbox("", label="Translate_Y")
+                angle = gr.Textbox("", label="Angle")
 
             with gr.Accordion("Inspiration Settings", open=False):
                 with gr.Row():
@@ -362,6 +375,10 @@ with demo:
             additional_pipeline_arguments,
             interpolation_type,
             interpolation_args,
+            zoom,
+            translate_x,
+            translate_y,
+            angle,
         ],
         outputs=output,
     )

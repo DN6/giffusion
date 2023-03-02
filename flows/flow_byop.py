@@ -6,7 +6,9 @@ import librosa
 import numpy as np
 import pandas as pd
 import torch
+from torchvision.transforms import ToPILImage, ToTensor
 from utils import (
+    apply_transformation2D,
     curve_from_cn_string,
     get_mel_reduce_func,
     load_video_frames,
@@ -16,6 +18,30 @@ from utils import (
 )
 
 from .flow_base import BaseFlow
+
+
+class AnimationCallback:
+    def __init__(self, animation_args):
+        self.zoom = animation_args.get("zoom", curve_from_cn_string("0:(1.0)"))
+        self.translate_x = animation_args.get(
+            "translate_x", curve_from_cn_string("0:(0.0)")
+        )
+        self.translate_y = animation_args.get(
+            "translate_y", curve_from_cn_string("0:(0.0)")
+        )
+        self.angle = animation_args.get("angle", curve_from_cn_string("0:(0.0)"))
+
+    def __call__(self, image, frame_idx):
+        image_tensor = ToTensor()(image).unsqueeze(0)
+
+        animations = {
+            "zoom": self.zoom[frame_idx],
+            "translate_x": self.translate_x[frame_idx],
+            "translate_y": self.translate_y[frame_idx],
+            "angle": self.angle[frame_idx],
+        }
+        transformed = apply_transformation2D(image_tensor, animations)
+        return ToPILImage()(transformed[0])
 
 
 class BYOPFlow(BaseFlow):
@@ -44,6 +70,7 @@ class BYOPFlow(BaseFlow):
         additional_pipeline_arguments="{}",
         interpolation_type="linear",
         interpolation_args="",
+        animation_args=None,
     ):
         super().__init__(pipe, device, batch_size)
 
@@ -114,12 +141,33 @@ class BYOPFlow(BaseFlow):
         else:
             self.prompts = self.get_prompts(key_frames)
 
+        animation_args = self.prep_animation_args(animation_args)
+        if animation_args:
+            if self.batch_size != 1:
+                raise ValueError(
+                    f"In order to use Animation Arguments",
+                    f"batch size must be set to 1 but found batch size {self.batch_size}",
+                )
+            self.animation_callback = AnimationCallback(animation_args)
+            self.animate = True
+        else:
+            self.animate = False
+
     def check_inputs(self, image_input, video_input):
         if image_input is not None and video_input is not None:
             raise ValueError(
                 f"Cannot forward both `image_input` and `video_input`. Please make sure to"
                 " only forward one of the two."
             )
+
+    def prep_animation_args(self, animation_args):
+        output = {}
+        for k, v in animation_args.items():
+            if len(v) == 0:
+                continue
+            output[k] = curve_from_cn_string(v)
+
+        return output
 
     def get_interpolation_schedule(
         self,
@@ -380,12 +428,17 @@ class BYOPFlow(BaseFlow):
         return pipe_kwargs
 
     def create(self, frames=None):
-        for batch in self.batch_generator(
+        batchgen = self.batch_generator(
             frames if frames else [i for i in range(self.max_frames)], self.batch_size
-        ):
+        )
+
+        for batch_idx, batch in enumerate(batchgen):
             pipe_kwargs = self.prepare_inputs(batch)
 
             with torch.autocast("cuda"):
-                images = self.pipe(**pipe_kwargs)
+                output = self.pipe(**pipe_kwargs)
 
-            yield images
+            if self.animate:
+                self.image_input = self.animation_callback(output.images[0], batch_idx)
+
+            yield output
