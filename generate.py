@@ -113,6 +113,7 @@ def run(
         text_prompts=text_prompt_inputs,
         negative_prompts=negative_prompt_inputs,
         guidance_scale=guidance_scale,
+        strength=strength,
         num_inference_steps=num_inference_steps,
         height=height,
         width=width,
