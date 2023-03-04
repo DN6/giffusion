@@ -1,27 +1,22 @@
 import inspect
 import json
 import random
+from tkinter import TOP
 
 import librosa
 import numpy as np
 import pandas as pd
 import torch
 from torchvision.transforms import ToPILImage, ToTensor
-from utils import (
-    apply_transformation2D,
-    curve_from_cn_string,
-    get_mel_reduce_func,
-    load_video_frames,
-    parse_key_frames,
-    slerp,
-    sync_prompts_to_video,
-)
+from utils import (apply_transformation2D, curve_from_cn_string,
+                   get_mel_reduce_func, load_video_frames, parse_key_frames,
+                   slerp, sync_prompts_to_video)
 
 from .flow_base import BaseFlow
 
 
 class AnimationCallback:
-    def __init__(self, animation_args):
+    def __init__(self, animation_args, image_latents=None):
         self.zoom = animation_args.get("zoom", curve_from_cn_string("0:(1.0)"))
         self.translate_x = animation_args.get(
             "translate_x", curve_from_cn_string("0:(0.0)")
@@ -32,7 +27,8 @@ class AnimationCallback:
         self.angle = animation_args.get("angle", curve_from_cn_string("0:(0.0)"))
 
     def __call__(self, image, frame_idx):
-        image_tensor = ToTensor()(image).unsqueeze(0)
+        image_tensor = ToTensor()(image)
+        image_tensor = image_tensor.unsqueeze(0)
 
         animations = {
             "zoom": self.zoom[frame_idx],
@@ -41,7 +37,7 @@ class AnimationCallback:
             "angle": self.angle[frame_idx],
         }
         transformed = apply_transformation2D(image_tensor, animations)
-        return ToPILImage()(transformed[0])
+        return transformed
 
 
 class BYOPFlow(BaseFlow):
@@ -427,6 +423,11 @@ class BYOPFlow(BaseFlow):
 
         return pipe_kwargs
 
+    @torch.no_grad()
+    def apply_animation(self, image, idx):
+        image_input = self.animation_callback(image, idx)
+        self.image_input = ToPILImage(mode="RGB")(image_input[0])
+
     def create(self, frames=None):
         batchgen = self.batch_generator(
             frames if frames else [i for i in range(self.max_frames)], self.batch_size
@@ -439,6 +440,7 @@ class BYOPFlow(BaseFlow):
                 output = self.pipe(**pipe_kwargs)
 
             if self.animate:
-                self.image_input = self.animation_callback(output.images[0], batch_idx)
+                image = output.images[0]
+                self.apply_animation(image, batch_idx)
 
             yield output

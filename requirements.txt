@@ -10,3 +10,4 @@ imageio-ffmpeg
 xformers
 pandas
 keyframed
+kornia
