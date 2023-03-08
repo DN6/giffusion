@@ -131,7 +131,7 @@ class BYOPFlow(BaseFlow):
         audio_slice = audio_array[start_sample:end_sample]
 
         # from https://aiart.dev/posts/sd-music-videos/sd_music_videos.html
-        onset_env = librosa.onset.onset_strength(audio_slice, sr=sr)
+        onset_env = librosa.onset.onset_strength(y=audio_slice, sr=sr)
         onset_env = librosa.util.normalize(onset_env)
 
         schedule_x = np.linspace(0, len(onset_env), len(onset_env))
