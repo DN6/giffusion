@@ -1,22 +1,27 @@
 import inspect
 import json
 import random
-from tkinter import TOP
 
 import librosa
 import numpy as np
 import pandas as pd
 import torch
 from torchvision.transforms import ToPILImage, ToTensor
-from utils import (apply_transformation2D, curve_from_cn_string,
-                   get_mel_reduce_func, load_video_frames, parse_key_frames,
-                   slerp, sync_prompts_to_video)
+from utils import (
+    apply_transformation2D,
+    curve_from_cn_string,
+    get_mel_reduce_func,
+    load_video_frames,
+    parse_key_frames,
+    slerp,
+    sync_prompts_to_video,
+)
 
 from .flow_base import BaseFlow
 
 
 class AnimationCallback:
-    def __init__(self, animation_args, image_latents=None):
+    def __init__(self, animation_args):
         self.zoom = animation_args.get("zoom", curve_from_cn_string("0:(1.0)"))
         self.translate_x = animation_args.get(
             "translate_x", curve_from_cn_string("0:(0.0)")
@@ -87,7 +92,7 @@ class BYOPFlow(BaseFlow):
         self.seed = seed
 
         self.device = device
-        self.generator = torch.Generator(self.device)
+        self.generator = torch.Generator(self.device).manual_seed(self.seed)
 
         self.fps = fps
 
@@ -305,7 +310,7 @@ class BYOPFlow(BaseFlow):
                 self.width // self.vae_scale_factor,
             ),
             device=self.pipe.device,
-            generator=self.generator.manual_seed(self.seed),
+            generator=self.generator,
         )
 
         for idx, (start_key_frame, end_key_frame) in enumerate(
@@ -417,7 +422,7 @@ class BYOPFlow(BaseFlow):
                 pipe_kwargs.update({"image": [self.image_input] * len(prompts)})
 
         if "generator" in self.pipe_signature:
-            pipe_kwargs.update({"generator": self.generator.manual_seed(self.seed)})
+            pipe_kwargs.update({"generator": self.generator})
 
         pipe_kwargs.update(self.additional_pipeline_argumenets)
 
@@ -435,7 +440,6 @@ class BYOPFlow(BaseFlow):
 
         for batch_idx, batch in enumerate(batchgen):
             pipe_kwargs = self.prepare_inputs(batch)
-
             with torch.autocast("cuda"):
                 output = self.pipe(**pipe_kwargs)
 
