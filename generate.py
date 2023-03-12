@@ -130,7 +130,6 @@ def run(
         guidance_scale=guidance_scale,
         strength=strength,
         num_inference_steps=num_inference_steps,
-        strength=strength,
         height=height,
         width=width,
         use_fixed_latent=use_fixed_latent,
