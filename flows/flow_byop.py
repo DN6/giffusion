@@ -234,7 +234,7 @@ class BYOPFlow(BaseFlow):
 
         # from https://aiart.dev/posts/sd-music-videos/sd_music_videos.html
         spec = librosa.feature.melspectrogram(
-            audio_slice, sr=sr, hop_length=frame_duration
+            y=audio_slice, sr=sr, hop_length=frame_duration
         )
         spec = self.audio_mel_reduce_func(spec, axis=0)
         spec_norm = librosa.util.normalize(spec)

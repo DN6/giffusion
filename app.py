@@ -37,7 +37,8 @@ def load_pipeline(model_name, pipeline_name, pipe):
 
         return pipe, f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
 
-    except Exception:
+    except Exception as e:
+        print(e)
         return None, f"Failed to Load Pipeline: {pipeline_name} with {model_name}"
 
 

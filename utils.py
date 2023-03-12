@@ -49,7 +49,7 @@ def onset_detect(audio, fps, audio_component):
     max_audio_frame = int((len(x) / sr) * fps)
 
     onset_frames = librosa.onset.onset_detect(
-        x, sr=sr, wait=1, pre_avg=1, post_avg=1, pre_max=1, post_max=1
+        y=x, sr=sr, wait=1, pre_avg=1, post_avg=1, pre_max=1, post_max=1
     )
     onset_times = librosa.frames_to_time(onset_frames)
 
