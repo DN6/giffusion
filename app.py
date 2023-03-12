@@ -197,7 +197,7 @@ with demo:
                     10,
                     1000,
                     step=10,
-                    value=30,
+                    value=20,
                     label="Number of Iteration Steps",
                 )
                 guidance_scale = gr.Slider(
