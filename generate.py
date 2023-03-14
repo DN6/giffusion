@@ -126,7 +126,7 @@ def run(
                 "beta_schedule": "scaled_linear",
             }
 
-        pipe.scheduler = load_scheduler(scheduler, scheduler_kwargs)
+        pipe.scheduler = load_scheduler(scheduler, **scheduler_kwargs)
 
     animation_args = {
         "zoom": zoom,
