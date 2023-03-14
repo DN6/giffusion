@@ -19,6 +19,10 @@ Giffusion supports using any pipeline and compatible checkpoint from the [Diffus
   <img src="https://user-images.githubusercontent.com/7529846/220323500-ae12c752-9cfe-441e-ba03-22a0ea787139.gif" width="800" title="hover text">
 </p>
 
+#### ControlNet Support
+
+Giffusion allows you to use the `StableDiffusionControlNetPipeline`. Simply paste in the ControlNet checkpoint you would like to use to load in the Pipeline.
+
 
 ### Multiframe Generation
 
@@ -152,17 +156,80 @@ This section covers all the components in the Diffusion Settings dropdown.
 
 6. **Image Strength:** Indicates how much to transform the reference image. Must be between 0 and 1. The image will be used as a starting point, adding more noise to it larger the strength. This is only applicable to Pipelines that support images as inputs.
 
-7. **Scheduler:**  Schedulers take in the output of a trained model, a sample which the diffusion process is iterating on, and a timestep to return a denoised sample. The different schedulers require a different number of iteration steps to produce good results. Use this selector to experiment with different schedulers and pipelines.
+7. **Use Default Pipeline Scheduler:** Select to use the scheduler that has been preconfigured with the Pipeline.
 
-8. **Batch Size:** Set the batch size used in the generation process. If you have access to a GPU with more memory, increase the batch size to increase the speed of the generation process.
+8. **Scheduler:**  Schedulers take in the output of a trained model, a sample which the diffusion process is iterating on, and a timestep to return a denoised sample. The different schedulers require a different number of iteration steps to produce good results. Use this selector to experiment with different schedulers and pipelines.
 
-9. **Image Height:** By default, generated images will have a height of 512 pixels. Certain models and pipelines support generating higher resolution images. Adjust this setting to account for those configurations. If an Image or Video input is provided, the height is set to the height of the original input.
+9. **Scheduler Arguments:** Additional Keyword arguments to pass to the selected scheduler.
 
-10. **Image Width:** By default, generated images will have a width of 512 pixels. Certain models and pipelines support generating higher resolution images. Adjust this setting to account for those configurations. If an Image or Video input is provided, the width is set to the width of the original input.
+10. **Batch Size:** Set the batch size used in the generation process. If you have access to a GPU with more memory, increase the batch size to increase the speed of the generation process.
 
-11. **Number of Latent Channels:** This is used to set the channel dimension of the noise latent. Certain Pipelines, e.g. `InstructPix2Pix` require the number of latent channels to be different from the number of input channels of the Unet model. The default value of `4` should work for a majority of pipelines and models.
+11. **Image Height:** By default, generated images will have a height of 512 pixels. Certain models and pipelines support generating higher resolution images. Adjust this setting to account for those configurations. If an Image or Video input is provided, the height is set to the height of the original input.
 
-12. **Additional Pipeline Arguments:** Diffuser Pipelines support a wide variety of arguments depending on the task. Use this textbox to input a dictionary of values that will be passed to the pipeline object as keyword arguments. e.g. Passing the Image Guidance Scale parameter to the InstructPix2PixPipeline
+12. **Image Width:** By default, generated images will have a width of 512 pixels. Certain models and pipelines support generating higher resolution images. Adjust this setting to account for those configurations. If an Image or Video input is provided, the width is set to the width of the original input.
+
+13. **Number of Latent Channels:** This is used to set the channel dimension of the noise latent. Certain Pipelines, e.g. `InstructPix2Pix` require the number of latent channels to be different from the number of input channels of the Unet model. The default value of `4` should work for a majority of pipelines and models.
+
+14. **Additional Pipeline Arguments:** Diffuser Pipelines support a wide variety of arguments depending on the task. Use this textbox to input a dictionary of values that will be passed to the pipeline object as keyword arguments. e.g. Passing the Image Guidance Scale parameter to the InstructPix2PixPipeline
+
+## Animation Settings
+
+### Interpolation Type
+
+Giffusion generates animations by first generating prompt embeddings and initial latents for the provided key frames and then interpolating the inbetween values using spherical interpolation. The schedule that controls the rate of change between interpolated values is `linear` by default.
+
+You are free to change this schedule to using this dropdown to either `sine` or `curve`.
+
+**Sine:**
+
+Using the `sine` schedule will interpolate between your start and end latents and embeddings using the following function `np.sin(np.pi * frequency) ** 2` with a default frequency of value of `1.0`. This will produce a single oscillation that will cause the generated output to move from your start prompt to the end prompt and back. Doubling the frequency double the number of oscillations.
+
+Sine interpolation also supports using multiple frequencies. An input of `1.0, 2.0` to the `Interpolation Arguments` will combine two sine waves with those frequencies.
+
+<details>
+<summary>Sine Interpolation</summary>
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7529846/225011513-cb4a1940-cc15-47b5-8c83-b86e88faeb3a.gif" width="512" title="hover text">
+</p>
+
+</details>
+
+**Curve:**
+
+You can also manually define an interpolation curve for your animation using [Chigozie Nri's Keyframe DSL](https://www.chigozie.co.uk/keyframe-string-generator/) which follows the [Deforum format.](https://docs.google.com/document/d/1RrQv7FntzOuLg4ohjRZPVL7iptIyBhwwbcEYEW2OfcI/edit)
+
+An example curve would be
+
+```
+0: (0.0), 50: (1.0), 60: (0.5)
+```
+
+Curve values must be between 0.0 and 1.0
+
+### Motion Settings
+
+Giffusion allows you to use key frame animation strings to control the angle, zoom and translation of the image across frames. These animation strings follow the exact format as [Deforum](https://docs.google.com/document/d/1RrQv7FntzOuLg4ohjRZPVL7iptIyBhwwbcEYEW2OfcI/edit). Currently, Giffusion only supports 2D animation and allows you to control the following parameters
+
+- Zoom: Scales the canvas size, multiplicatively. 1 is static, with numbers greater than 1 moving forwards and numbers less than 1 moving backward.
+- Angle:  Rolls the canvas clockwise or counterclockwise in degrees per frame. This parameter uses positive values to roll counterclockwise and negative values to roll clockwise.
+- Translation X: Number of pixels to shift in the X direction. Moves the canvas left or right. This parameter uses positive values to move right and negative values to move left.
+- Translation Y: Number of pixels to shift in the Y direction. Moves the canvas up or down. This parameter uses positive values to move up and negative values to move down.
+
+**Zoom Parameter Example**
+```
+0: (1.05),1: (1.05),2: (1.05),3: (1.05),4: (1.05),5: (1.05),6: (1.05),7: (1.05),8: (1.05),9: (1.05),10: (1.05)
+```
+
+**Angle Parameter Example**
+```
+0: (10.0),1: (10.0),2: (10.0),3: (10.0),4: (10.0),5: (10.0),6: (10.0),7: (10.0),8: (10.0),9: (10.0),10: (10.0)
+```
+
+**Translation X/Y Parameter Example**
+```
+0: (5.0),1: (5.0),2: (5.0),3: (5.0),4: (5.0),5: (5.0),6: (5.0),7: (5.0),8: (5.0),9: (5.0),10: (5.0)
+```
 
 ## Output Settings
 
@@ -170,6 +237,8 @@ This section covers all the components in the Diffusion Settings dropdown.
 2. **Frame Rate:** Set the frame rate for the output.
 
 ## References
+
+Giffusion would not be possible without the following resources ❤️
 
 1. Prompt format is based on the work from [Deforum Art](https://deforum.github.io/)
 2. Inspiration Button uses the [Midjourney Prompt Generator](https://huggingface.co/spaces/doevent/prompt-generator) Space by DoEvent 
