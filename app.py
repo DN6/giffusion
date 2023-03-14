@@ -51,8 +51,8 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
                 safety_checker=None,
             )
 
+        pipe.enable_model_cpu_offload()
         pipe.enable_xformers_memory_efficient_attention()
-        pipe = pipe.to(device)
 
         return pipe, f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
 
@@ -306,7 +306,7 @@ with demo:
                     )
 
         with gr.Column(elem_id="output", scale=2):
-            output = gr.Video(label="Model Output", elem_id="output", interactive=False)
+            output = gr.Video(label="Model Output", elem_id="output")
             submit = gr.Button(
                 label="Submit",
                 value="Create",
