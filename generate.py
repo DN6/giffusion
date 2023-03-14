@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 from datetime import datetime
 
 import typer
@@ -14,6 +15,7 @@ from diffusers.schedulers import (
     LMSDiscreteScheduler,
     PNDMScheduler,
     RePaintScheduler,
+    UniPCMultistepScheduler,
 )
 from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
@@ -43,6 +45,7 @@ def load_scheduler(scheduler, **kwargs):
         euler=EulerDiscreteScheduler(**kwargs),
         euler_ads=EulerAncestralDiscreteScheduler(**kwargs),
         repaint=RePaintScheduler(**kwargs),
+        unipc=UniPCMultistepScheduler(**kwargs),
     )
     return scheduler_map.get(scheduler)
 
@@ -59,7 +62,9 @@ def run(
     batch_size=1,
     seed=42,
     fps=24,
+    use_default_scheduler=False,
     scheduler="pndms",
+    scheduler_kwargs="{}",
     use_fixed_latent=False,
     use_prompt_embeds=True,
     num_latent_channels=4,
@@ -112,9 +117,16 @@ def run(
 
         experiment.log_parameters(parameters)
 
-    pipe.scheduler = load_scheduler(
-        scheduler, beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
-    )
+    if not use_default_scheduler:
+        scheduler_kwargs = json.loads(scheduler_kwargs)
+        if not scheduler_kwargs:
+            scheduler_kwargs = {
+                "beta_start": 0.00085,
+                "beta_end": 0.012,
+                "beta_schedule": "scaled_linear",
+            }
+
+        pipe.scheduler = load_scheduler(scheduler, scheduler_kwargs)
 
     animation_args = {
         "zoom": zoom,
@@ -122,6 +134,7 @@ def run(
         "translate_y": translate_y,
         "angle": angle,
     }
+    additional_pipeline_arguments = json.loads(additional_pipeline_arguments)
 
     flow = BYOPFlow(
         pipe=pipe,

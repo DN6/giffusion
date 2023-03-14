@@ -68,7 +68,7 @@ class BYOPFlow(BaseFlow):
         batch_size=1,
         fps=10,
         negative_prompts="",
-        additional_pipeline_arguments="{}",
+        additional_pipeline_arguments={},
         interpolation_type="linear",
         interpolation_args="",
         animation_args=None,
@@ -84,7 +84,7 @@ class BYOPFlow(BaseFlow):
         self.use_prompt_embeds = use_prompt_embeds
         self.num_latent_channels = num_latent_channels
         self.vae_scale_factor = self.pipe.vae_scale_factor
-        self.additional_pipeline_argumenets = json.loads(additional_pipeline_arguments)
+        self.additional_pipeline_argumenets = additional_pipeline_arguments
 
         self.guidance_scale = guidance_scale
         self.num_inference_steps = num_inference_steps

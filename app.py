@@ -16,7 +16,7 @@ from utils import (
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
 
-def load_pipeline(model_name, pipeline_name, pipe):
+def load_pipeline(model_name, pipeline_name, controlnet, pipe):
     try:
         # clear existing model from memory
         if pipe is not None:
@@ -25,13 +25,32 @@ def load_pipeline(model_name, pipeline_name, pipe):
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
-        pipe = pipe_cls.from_pretrained(
-            model_name,
-            use_auth_token=True,
-            torch_dtype=torch.float16,
-            safety_checker=None,
-        )
+        if controlnet:
+            from diffusers import ControlNetModel
+
+            controlnet_model = ControlNetModel.from_pretrained(
+                controlnet, torch_dtype=torch.float16
+            )
+            pipeline_name = "StableDiffusionControlNetPipeline"
+
+            pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
+            pipe = pipe_cls.from_pretrained(
+                model_name,
+                use_auth_token=True,
+                torch_dtype=torch.float16,
+                safety_checker=None,
+                controlnet=controlnet_model,
+            )
+
+        else:
+            pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
+            pipe = pipe_cls.from_pretrained(
+                model_name,
+                use_auth_token=True,
+                torch_dtype=torch.float16,
+                safety_checker=None,
+            )
+
         pipe.enable_xformers_memory_efficient_attention()
         pipe = pipe.to(device)
 
@@ -99,7 +118,9 @@ def predict(
     seed,
     batch_size,
     fps,
+    use_default_scheduler,
     scheduler,
+    scheduler_kwargs,
     use_fixed_latent,
     use_prompt_embeds,
     num_latent_channels,
@@ -130,7 +151,9 @@ def predict(
         seed=int(seed),
         batch_size=int(batch_size),
         fps=int(fps),
+        use_default_scheduler=use_default_scheduler,
         scheduler=scheduler,
+        scheduler_kwargs=scheduler_kwargs,
         use_fixed_latent=use_fixed_latent,
         use_prompt_embeds=use_prompt_embeds,
         num_latent_channels=int(num_latent_channels),
@@ -168,6 +191,7 @@ with demo:
                         pipeline_name = gr.Textbox(
                             label="Model Name", value="DiffusionPipeline"
                         )
+                        controlnet = gr.Textbox(label="ControlNet Checkpoint")
                     with gr.Column():
                         with gr.Row():
                             load_pipeline_btn = gr.Button(value="Load Pipeline")
@@ -210,6 +234,9 @@ with demo:
                 strength = gr.Slider(
                     0, 1.0, step=0.1, value=0.5, label="Image Strength"
                 )
+                use_default_scheduler = gr.Checkbox(
+                    label="Use Default Pipeline Scheduler"
+                )
                 scheduler = gr.Dropdown(
                     [
                         "klms",
@@ -222,10 +249,16 @@ with demo:
                         "euler",
                         "euler_ads",
                         "repaint",
+                        "unipc",
                     ],
                     value="deis",
                     label="Scheduler",
                 )
+                scheduler_kwargs = gr.Textbox(
+                    label="Scheduler Arguments",
+                    value="{}",
+                )
+
                 image_height = gr.Number(value=512, label="Image Height")
                 image_width = gr.Number(value=512, label="Image Width")
                 num_latent_channels = gr.Number(
@@ -326,7 +359,9 @@ with demo:
     pipe = gr.State()
 
     load_pipeline_btn.click(
-        load_pipeline, [model_name, pipeline_name, pipe], [pipe, load_message]
+        load_pipeline,
+        [model_name, pipeline_name, controlnet, pipe],
+        [pipe, load_message],
     )
 
     generate_btn.click(
@@ -362,7 +397,9 @@ with demo:
             seed,
             batch_size,
             fps,
+            use_default_scheduler,
             scheduler,
+            scheduler_kwargs,
             use_fixed_latent,
             use_prompt_embeds,
             num_latent_channels,
