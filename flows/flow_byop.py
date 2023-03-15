@@ -6,9 +6,43 @@ import librosa
 import numpy as np
 import pandas as pd
 import torch
-from utils import load_video_frames, parse_key_frames, slerp, sync_prompts_to_video
+from torchvision.transforms import ToPILImage, ToTensor
+from utils import (
+    apply_transformation2D,
+    curve_from_cn_string,
+    get_mel_reduce_func,
+    load_video_frames,
+    parse_key_frames,
+    slerp,
+    sync_prompts_to_video,
+)
 
 from .flow_base import BaseFlow
+
+
+class AnimationCallback:
+    def __init__(self, animation_args):
+        self.zoom = animation_args.get("zoom", curve_from_cn_string("0:(1.0)"))
+        self.translate_x = animation_args.get(
+            "translate_x", curve_from_cn_string("0:(0.0)")
+        )
+        self.translate_y = animation_args.get(
+            "translate_y", curve_from_cn_string("0:(0.0)")
+        )
+        self.angle = animation_args.get("angle", curve_from_cn_string("0:(0.0)"))
+
+    def __call__(self, image, frame_idx):
+        image_tensor = ToTensor()(image)
+        image_tensor = image_tensor.unsqueeze(0)
+
+        animations = {
+            "zoom": self.zoom[frame_idx],
+            "translate_x": self.translate_x[frame_idx],
+            "translate_y": self.translate_y[frame_idx],
+            "angle": self.angle[frame_idx],
+        }
+        transformed = apply_transformation2D(image_tensor, animations)
+        return transformed
 
 
 class BYOPFlow(BaseFlow):
@@ -28,12 +62,16 @@ class BYOPFlow(BaseFlow):
         image_input=None,
         audio_input=None,
         audio_component="both",
+        audio_mel_spectogram_reduce="max",
         video_input=None,
         seed=42,
         batch_size=1,
         fps=10,
         negative_prompts="",
-        additional_pipeline_arguments="{}",
+        additional_pipeline_arguments={},
+        interpolation_type="linear",
+        interpolation_args="",
+        animation_args=None,
     ):
         super().__init__(pipe, device, batch_size)
 
@@ -46,7 +84,7 @@ class BYOPFlow(BaseFlow):
         self.use_prompt_embeds = use_prompt_embeds
         self.num_latent_channels = num_latent_channels
         self.vae_scale_factor = self.pipe.vae_scale_factor
-        self.additional_pipeline_argumenets = json.loads(additional_pipeline_arguments)
+        self.additional_pipeline_argumenets = additional_pipeline_arguments
 
         self.guidance_scale = guidance_scale
         self.num_inference_steps = num_inference_steps
@@ -54,7 +92,7 @@ class BYOPFlow(BaseFlow):
         self.seed = seed
 
         self.device = device
-        self.generator = torch.Generator(self.device)
+        self.generator = torch.Generator(self.device).manual_seed(self.seed)
 
         self.fps = fps
 
@@ -84,6 +122,8 @@ class BYOPFlow(BaseFlow):
         else:
             self.audio_array, self.sr = (None, None)
 
+        self.audio_mel_reduce_func = get_mel_reduce_func(audio_mel_spectogram_reduce)
+
         last_frame, _ = max(key_frames, key=lambda x: x[0])
         self.max_frames = last_frame + 1
 
@@ -92,11 +132,27 @@ class BYOPFlow(BaseFlow):
             random.randint(0, 18446744073709551615) for i in range(self.max_frames)
         ]
 
-        self.init_latents = self.get_init_latents(key_frames)
+        interpolation_config = {
+            "interpolation_type": interpolation_type,
+            "interpolation_args": interpolation_args,
+        }
+        self.init_latents = self.get_init_latents(key_frames, interpolation_config)
         if self.use_prompt_embeds:
-            self.prompts = self.get_prompt_embeddings(key_frames)
+            self.prompts = self.get_prompt_embeddings(key_frames, interpolation_config)
         else:
             self.prompts = self.get_prompts(key_frames)
+
+        animation_args = self.prep_animation_args(animation_args)
+        if animation_args:
+            if self.batch_size != 1:
+                raise ValueError(
+                    f"In order to use Animation Arguments",
+                    f"batch size must be set to 1 but found batch size {self.batch_size}",
+                )
+            self.animation_callback = AnimationCallback(animation_args)
+            self.animate = True
+        else:
+            self.animate = False
 
     def check_inputs(self, image_input, video_input):
         if image_input is not None and video_input is not None:
@@ -105,11 +161,21 @@ class BYOPFlow(BaseFlow):
                 " only forward one of the two."
             )
 
+    def prep_animation_args(self, animation_args):
+        output = {}
+        for k, v in animation_args.items():
+            if len(v) == 0:
+                continue
+            output[k] = curve_from_cn_string(v)
+
+        return output
+
     def get_interpolation_schedule(
         self,
         start_frame,
         end_frame,
         fps,
+        interpolation_config,
         audio_array=None,
         sr=None,
     ):
@@ -118,24 +184,64 @@ class BYOPFlow(BaseFlow):
                 start_frame, end_frame, fps, audio_array, sr
             )
 
+        if interpolation_config["interpolation_type"] == "sine":
+            interpolation_args = interpolation_config["interpolation_args"]
+            return self.get_sine_interpolation_schedule(
+                start_frame, end_frame, interpolation_args
+            )
+
+        if interpolation_config["interpolation_type"] == "curve":
+            interpolation_args = interpolation_config["interpolation_args"]
+            return self.get_curve_interpolation_schedule(
+                start_frame, end_frame, interpolation_args
+            )
+
         num_frames = (end_frame - start_frame) + 1
+
         return np.linspace(0, 1, num_frames)
+
+    def get_sine_interpolation_schedule(
+        self, start_frame, end_frame, interpolation_args
+    ):
+        output = []
+        num_frames = (end_frame - start_frame) + 1
+        frames = np.arange(num_frames) / num_frames
+
+        interpolation_args = interpolation_args.split(",")
+        if len(interpolation_args) == 0:
+            interpolation_args = [1.0]
+        else:
+            interpolation_args = list(map(lambda x: float(x), interpolation_args))
+
+        for frequency in interpolation_args:
+            curve = np.sin(np.pi * frames * frequency) ** 2
+            output.append(curve)
+
+        schedule = sum(output)
+        schedule = (schedule - np.min(schedule)) / np.ptp(schedule)
+
+        return schedule
 
     def get_interpolation_schedule_from_audio(
         self, start_frame, end_frame, fps, audio_array, sr
     ):
         num_frames = (end_frame - start_frame) + 1
+        frame_duration = sr // fps
 
         start_sample = int((start_frame / fps) * sr)
         end_sample = int((end_frame / fps) * sr)
         audio_slice = audio_array[start_sample:end_sample]
 
         # from https://aiart.dev/posts/sd-music-videos/sd_music_videos.html
-        onset_env = librosa.onset.onset_strength(y=audio_slice, sr=sr)
-        onset_env = librosa.util.normalize(onset_env)
+        spec = librosa.feature.melspectrogram(
+            y=audio_slice, sr=sr, hop_length=frame_duration
+        )
+        spec = self.audio_mel_reduce_func(spec, axis=0)
+        spec_norm = librosa.util.normalize(spec)
 
-        schedule_x = np.linspace(0, len(onset_env), len(onset_env))
-        schedule_y = np.cumsum(onset_env)
+        schedule_x = np.linspace(0, len(spec_norm), len(spec_norm))
+        schedule_y = spec_norm
+        schedule_y = np.cumsum(spec_norm)
         schedule_y /= schedule_y[-1]
 
         resized_schedule = np.linspace(0, len(schedule_y), num_frames)
@@ -143,8 +249,18 @@ class BYOPFlow(BaseFlow):
 
         return interp_schedule
 
+    def get_curve_interpolation_schedule(
+        self, start_frame, end_frame, interpolation_args
+    ):
+        curve = curve_from_cn_string(interpolation_args)
+        curve_params = []
+        for frame in range(start_frame, end_frame + 1):
+            curve_params.append(curve[frame])
+
+        return np.array(curve_params)
+
     @torch.no_grad()
-    def get_prompt_embeddings(self, key_frames):
+    def get_prompt_embeddings(self, key_frames, interpolation_config):
         output = {}
 
         for idx, (start_key_frame, end_key_frame) in enumerate(
@@ -160,6 +276,7 @@ class BYOPFlow(BaseFlow):
                 start_frame,
                 end_frame,
                 self.fps,
+                interpolation_config,
                 self.audio_array,
                 self.sr,
             )
@@ -183,7 +300,7 @@ class BYOPFlow(BaseFlow):
         return output
 
     @torch.no_grad()
-    def get_init_latents(self, key_frames):
+    def get_init_latents(self, key_frames, interpolation_config):
         output = {}
         start_latent = torch.randn(
             (
@@ -193,7 +310,7 @@ class BYOPFlow(BaseFlow):
                 self.width // self.vae_scale_factor,
             ),
             device=self.pipe.device,
-            generator=self.generator.manual_seed(self.seed),
+            generator=self.generator,
         )
 
         for idx, (start_key_frame, end_key_frame) in enumerate(
@@ -221,6 +338,7 @@ class BYOPFlow(BaseFlow):
                 start_frame,
                 end_frame,
                 self.fps,
+                interpolation_config,
                 self.audio_array,
                 self.sr,
             )
@@ -304,19 +422,29 @@ class BYOPFlow(BaseFlow):
                 pipe_kwargs.update({"image": [self.image_input] * len(prompts)})
 
         if "generator" in self.pipe_signature:
-            pipe_kwargs.update({"generator": self.generator.manual_seed(self.seed)})
+            pipe_kwargs.update({"generator": self.generator})
 
         pipe_kwargs.update(self.additional_pipeline_argumenets)
 
         return pipe_kwargs
 
+    @torch.no_grad()
+    def apply_animation(self, image, idx):
+        image_input = self.animation_callback(image, idx)
+        self.image_input = ToPILImage(mode="RGB")(image_input[0])
+
     def create(self, frames=None):
-        for batch in self.batch_generator(
+        batchgen = self.batch_generator(
             frames if frames else [i for i in range(self.max_frames)], self.batch_size
-        ):
+        )
+
+        for batch_idx, batch in enumerate(batchgen):
             pipe_kwargs = self.prepare_inputs(batch)
-
             with torch.autocast("cuda"):
-                images = self.pipe(**pipe_kwargs)
+                output = self.pipe(**pipe_kwargs)
 
-            yield images
+            if self.animate:
+                image = output.images[0]
+                self.apply_animation(image, batch_idx)
+
+            yield output

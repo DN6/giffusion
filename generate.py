@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 from datetime import datetime
 
 import typer
@@ -14,6 +15,7 @@ from diffusers.schedulers import (
     LMSDiscreteScheduler,
     PNDMScheduler,
     RePaintScheduler,
+    UniPCMultistepScheduler,
 )
 from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
@@ -28,7 +30,7 @@ logger = logging.getLogger(__name__)
 # Disable denoising progress bar
 disable_progress_bar()
 
-OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "../generated")
+OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
 
 
 def load_scheduler(scheduler, **kwargs):
@@ -43,6 +45,7 @@ def load_scheduler(scheduler, **kwargs):
         euler=EulerDiscreteScheduler(**kwargs),
         euler_ads=EulerAncestralDiscreteScheduler(**kwargs),
         repaint=RePaintScheduler(**kwargs),
+        unipc=UniPCMultistepScheduler(**kwargs),
     )
     return scheduler_map.get(scheduler)
 
@@ -55,21 +58,30 @@ def run(
     width=512,
     num_inference_steps=50,
     guidance_scale=7.5,
-    strength=1.0,
+    strength=0.5,
     batch_size=1,
     seed=42,
     fps=24,
+    use_default_scheduler=False,
     scheduler="pndms",
+    scheduler_kwargs="{}",
     use_fixed_latent=False,
     use_prompt_embeds=True,
     num_latent_channels=4,
     audio_input=None,
     audio_component="both",
+    mel_spectogram_reduce="max",
     image_input=None,
     video_input=None,
     output_format="mp4",
     model_name="runwayml/stable-diffusion-v1-5",
     additional_pipeline_arguments="{}",
+    interpolation_type="linear",
+    interpolation_args="",
+    zoom="",
+    translate_x="",
+    translate_y="",
+    angle="",
 ):
     if pipe is None:
         raise ValueError(
@@ -105,9 +117,25 @@ def run(
 
         experiment.log_parameters(parameters)
 
-    pipe.scheduler = load_scheduler(
-        scheduler, beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
-    )
+    if not use_default_scheduler:
+        scheduler_kwargs = json.loads(scheduler_kwargs)
+        if not scheduler_kwargs:
+            scheduler_kwargs = {
+                "beta_start": 0.00085,
+                "beta_end": 0.012,
+                "beta_schedule": "scaled_linear",
+            }
+
+        pipe.scheduler = load_scheduler(scheduler, **scheduler_kwargs)
+
+    animation_args = {
+        "zoom": zoom,
+        "translate_x": translate_x,
+        "translate_y": translate_y,
+        "angle": angle,
+    }
+    additional_pipeline_arguments = json.loads(additional_pipeline_arguments)
+
     flow = BYOPFlow(
         pipe=pipe,
         text_prompts=text_prompt_inputs,
@@ -124,11 +152,15 @@ def run(
         image_input=image_input,
         audio_input=audio_input,
         audio_component=audio_component,
+        audio_mel_spectogram_reduce=mel_spectogram_reduce,
         video_input=video_input,
         seed=seed,
         batch_size=batch_size,
         fps=fps,
         additional_pipeline_arguments=additional_pipeline_arguments,
+        interpolation_type=interpolation_type,
+        interpolation_args=interpolation_args,
+        animation_args=animation_args,
     )
 
     max_frames = flow.max_frames

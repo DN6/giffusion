@@ -16,7 +16,7 @@ from utils import (
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
 
-def load_pipeline(model_name, pipeline_name, pipe):
+def load_pipeline(model_name, pipeline_name, controlnet, pipe):
     try:
         # clear existing model from memory
         if pipe is not None:
@@ -25,15 +25,34 @@ def load_pipeline(model_name, pipeline_name, pipe):
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
-        pipe = pipe_cls.from_pretrained(
-            model_name,
-            use_auth_token=True,
-            torch_dtype=torch.float16,
-            safety_checker=None,
-        )
+        if controlnet:
+            from diffusers import ControlNetModel
+
+            controlnet_model = ControlNetModel.from_pretrained(
+                controlnet, torch_dtype=torch.float16
+            )
+            pipeline_name = "StableDiffusionControlNetPipeline"
+
+            pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
+            pipe = pipe_cls.from_pretrained(
+                model_name,
+                use_auth_token=True,
+                torch_dtype=torch.float16,
+                safety_checker=None,
+                controlnet=controlnet_model,
+            )
+
+        else:
+            pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
+            pipe = pipe_cls.from_pretrained(
+                model_name,
+                use_auth_token=True,
+                torch_dtype=torch.float16,
+                safety_checker=None,
+            )
+
+        pipe.enable_model_cpu_offload()
         pipe.enable_xformers_memory_efficient_attention()
-        pipe = pipe.to(device)
 
         return pipe, f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
 
@@ -80,6 +99,13 @@ def send_to_video_input(video):
     return video
 
 
+def display_interpolation_args(value):
+    if value != "linear":
+        return gr.update(visible=True)
+    else:
+        return gr.update(visible=False)
+
+
 def predict(
     pipe,
     text_prompt_input,
@@ -92,17 +118,26 @@ def predict(
     seed,
     batch_size,
     fps,
+    use_default_scheduler,
     scheduler,
+    scheduler_kwargs,
     use_fixed_latent,
     use_prompt_embeds,
     num_latent_channels,
     audio_input,
     audio_component,
+    mel_spectogram_reduce,
     image_input,
     video_input,
     output_format,
     model_name,
     additional_pipeline_arguments,
+    interpolation_type,
+    interpolation_args,
+    zoom,
+    translate_x,
+    translate_y,
+    angle,
 ):
     output = run(
         pipe=pipe,
@@ -116,17 +151,26 @@ def predict(
         seed=int(seed),
         batch_size=int(batch_size),
         fps=int(fps),
+        use_default_scheduler=use_default_scheduler,
         scheduler=scheduler,
+        scheduler_kwargs=scheduler_kwargs,
         use_fixed_latent=use_fixed_latent,
         use_prompt_embeds=use_prompt_embeds,
         num_latent_channels=int(num_latent_channels),
         audio_input=audio_input,
         audio_component=audio_component,
+        mel_spectogram_reduce=mel_spectogram_reduce,
         image_input=image_input,
         video_input=video_input,
         output_format=output_format,
         model_name=model_name,
         additional_pipeline_arguments=additional_pipeline_arguments,
+        interpolation_type=interpolation_type,
+        interpolation_args=interpolation_args,
+        zoom=zoom,
+        translate_x=translate_x,
+        translate_y=translate_y,
+        angle=angle,
     )
 
     return output
@@ -147,6 +191,7 @@ with demo:
                         pipeline_name = gr.Textbox(
                             label="Model Name", value="DiffusionPipeline"
                         )
+                        controlnet = gr.Textbox(label="ControlNet Checkpoint")
                     with gr.Column():
                         with gr.Row():
                             load_pipeline_btn = gr.Button(value="Load Pipeline")
@@ -176,7 +221,7 @@ with demo:
                     10,
                     1000,
                     step=10,
-                    value=30,
+                    value=20,
                     label="Number of Iteration Steps",
                 )
                 guidance_scale = gr.Slider(
@@ -188,6 +233,9 @@ with demo:
                 )
                 strength = gr.Slider(
                     0, 1.0, step=0.1, value=0.5, label="Image Strength"
+                )
+                use_default_scheduler = gr.Checkbox(
+                    label="Use Default Pipeline Scheduler"
                 )
                 scheduler = gr.Dropdown(
                     [
@@ -201,10 +249,16 @@ with demo:
                         "euler",
                         "euler_ads",
                         "repaint",
+                        "unipc",
                     ],
                     value="deis",
                     label="Scheduler",
                 )
+                scheduler_kwargs = gr.Textbox(
+                    label="Scheduler Arguments",
+                    value="{}",
+                )
+
                 image_height = gr.Number(value=512, label="Image Height")
                 image_width = gr.Number(value=512, label="Image Width")
                 num_latent_channels = gr.Number(
@@ -219,6 +273,26 @@ with demo:
                         lines=4,
                         placeholder="A dictionary of key word arguments to pass to the pipeline",
                     )
+
+            with gr.Accordion("Animation Settings", open=False):
+                interpolation_type = gr.Dropdown(
+                    ["linear", "sine", "curve"],
+                    value="linear",
+                    label="Interpolation Type",
+                )
+                interpolation_args = gr.Textbox(
+                    "", label="Interpolation Arguments", visible=False
+                )
+                interpolation_type.change(
+                    display_interpolation_args,
+                    [interpolation_type],
+                    [interpolation_args],
+                )
+
+                zoom = gr.Textbox("", label="Zoom")
+                translate_x = gr.Textbox("", label="Translate_X")
+                translate_y = gr.Textbox("", label="Translate_Y")
+                angle = gr.Textbox("", label="Angle")
 
             with gr.Accordion("Inspiration Settings", open=False):
                 with gr.Row():
@@ -265,6 +339,11 @@ with demo:
                     label="Audio Component",
                 )
                 audio_info_btn = gr.Button(value="Get Key Frame Information")
+                mel_spectogram_reduce = gr.Dropdown(
+                    ["mean", "median", "max"],
+                    label="Mel Spectrogram Reduction",
+                    value="max",
+                )
 
             with gr.Accordion("Video Input", open=False):
                 video_input = gr.Video(label="Video Input")
@@ -280,7 +359,9 @@ with demo:
     pipe = gr.State()
 
     load_pipeline_btn.click(
-        load_pipeline, [model_name, pipeline_name, pipe], [pipe, load_message]
+        load_pipeline,
+        [model_name, pipeline_name, controlnet, pipe],
+        [pipe, load_message],
     )
 
     generate_btn.click(
@@ -316,17 +397,26 @@ with demo:
             seed,
             batch_size,
             fps,
+            use_default_scheduler,
             scheduler,
+            scheduler_kwargs,
             use_fixed_latent,
             use_prompt_embeds,
             num_latent_channels,
             audio_input,
             audio_component,
+            mel_spectogram_reduce,
             image_input,
             video_input,
             output_format,
             model_name,
             additional_pipeline_arguments,
+            interpolation_type,
+            interpolation_args,
+            zoom,
+            translate_x,
+            translate_y,
+            angle,
         ],
         outputs=output,
     )

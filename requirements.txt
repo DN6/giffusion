@@ -9,3 +9,6 @@ comet_ml
 imageio-ffmpeg
 xformers
 pandas
+keyframed
+kornia
+triton

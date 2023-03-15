@@ -3,9 +3,27 @@ import re
 import librosa
 import numpy as np
 import torch
+from keyframed.dsl import curve_from_cn_string
+from kornia.geometry.transform import Affine
 from PIL import Image
 from torchvision.io import read_video, write_video
 from torchvision.transforms.functional import pil_to_tensor, to_pil_image
+
+
+def apply_transformation2D(image, animations, padding_mode="border"):
+    zoom = torch.tensor([animations["zoom"], animations["zoom"]]).unsqueeze(0)
+
+    translate_x = animations["translate_x"]
+    translate_y = animations["translate_y"]
+
+    translate = torch.tensor((translate_x, translate_y)).unsqueeze(0)
+    angle = torch.tensor([animations["angle"]])
+
+    transformed_img = Affine(
+        angle=angle, translation=translate, scale_factor=zoom, padding_mode=padding_mode
+    )(image)
+
+    return transformed_img
 
 
 def parse_key_frames(prompts, prompt_parser=None):
@@ -47,6 +65,10 @@ def get_audio_key_frame_information(audio_input, fps, audio_component):
     audio_key_frames = onsets["frames"]
 
     return audio_key_frames
+
+
+def get_mel_reduce_func(reduce_name):
+    return {"max": np.amax, "median": np.median, "mean": np.mean}.get(reduce_name)
 
 
 def get_video_frame_information(video_input):
