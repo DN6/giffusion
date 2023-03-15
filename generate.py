@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 # Disable denoising progress bar
 disable_progress_bar()
 
-OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "../generated")
+OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
 
 
 def load_scheduler(scheduler, **kwargs):
