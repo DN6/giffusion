@@ -11,3 +11,4 @@ xformers
 pandas
 keyframed
 kornia
+triton
