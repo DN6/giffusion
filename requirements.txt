@@ -4,7 +4,7 @@ accelerate
 typer
 av<10.0.0
 ftfy
-gradio
+gradio==3.20.0
 comet_ml
 imageio-ffmpeg
 xformers
