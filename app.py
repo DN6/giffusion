@@ -1,4 +1,5 @@
 import importlib
+import os
 import pathlib
 
 import gradio as gr
@@ -13,6 +14,7 @@ from utils import (
     to_pil_image,
 )
 
+OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
 
@@ -23,13 +25,11 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
             del pipe
             torch.cuda.empty_cache()
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
         if controlnet:
             from diffusers import ControlNetModel
 
             controlnet_model = ControlNetModel.from_pretrained(
-                controlnet, torch_dtype=torch.float16
+                controlnet, torch_dtype=torch.float16, cache_dir=OUTPUT_BASE_PATH
             )
             pipeline_name = "StableDiffusionControlNetPipeline"
 
@@ -40,6 +40,7 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
                 torch_dtype=torch.float16,
                 safety_checker=None,
                 controlnet=controlnet_model,
+                cache_dir=OUTPUT_BASE_PATH,
             )
 
         else:
@@ -49,6 +50,7 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
                 use_auth_token=True,
                 torch_dtype=torch.float16,
                 safety_checker=None,
+                cache_dir=OUTPUT_BASE_PATH,
             )
 
         pipe.enable_model_cpu_offload()
@@ -383,7 +385,7 @@ with demo:
     send_to_image_input_btn.click(send_to_image_input, [output, frame_id], image_input)
     send_to_video_input_btn.click(send_to_video_input, [output], [video_input])
 
-    submit.click(
+    submit_event = submit.click(
         fn=predict,
         inputs=[
             pipe,

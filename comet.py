@@ -4,7 +4,11 @@ import comet_ml
 def start_experiment():
     try:
         api = comet_ml.API()
-        workspace = api.get_default_workspace()
+
+        workspace = comet_ml.config.get_config()["comet.workspace"]
+        if workspace is None:
+            workspace = api.get_default_workspace()
+
         project_name = comet_ml.config.get_config()["comet.project_name"]
 
         experiment = comet_ml.APIExperiment(
