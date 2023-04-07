@@ -309,12 +309,18 @@ with demo:
 
         with gr.Column(elem_id="output", scale=2):
             output = gr.Video(label="Model Output", elem_id="output")
-            submit = gr.Button(
-                label="Submit",
-                value="Create",
-                variant="primary",
-                elem_id="submit-btn",
-            )
+            with gr.Row():
+                submit = gr.Button(
+                    label="Submit",
+                    value="Create",
+                    variant="primary",
+                    elem_id="submit-btn",
+                )
+                stop = gr.Button(
+                    label="Submit",
+                    value="Stop",
+                    elem_id="stop-btn",
+                )
             with gr.Row():
                 text_prompt_input = gr.Textbox(
                     lines=10,
@@ -422,8 +428,8 @@ with demo:
         ],
         outputs=output,
     )
-
-demo.queue(concurrency_count=2)
+    stop.click(fn=None, inputs=None, outputs=None, cancels=[submit_event])
 
 if __name__ == "__main__":
+    demo.queue(concurrency_count=2)
     demo.launch(share=True)
