@@ -191,7 +191,7 @@ with demo:
                             label="Model Name", value="runwayml/stable-diffusion-v1-5"
                         )
                         pipeline_name = gr.Textbox(
-                            label="Model Name", value="DiffusionPipeline"
+                            label="Pipeline Name", value="DiffusionPipeline"
                         )
                         controlnet = gr.Textbox(label="ControlNet Checkpoint")
                     with gr.Column():
@@ -432,4 +432,4 @@ with demo:
 
 if __name__ == "__main__":
     demo.queue(concurrency_count=2)
-    demo.launch(share=True)
+    demo.launch(share=True, debug=True)

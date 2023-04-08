@@ -1,5 +1,5 @@
 import re
-
+import json
 import librosa
 import numpy as np
 import torch
@@ -20,7 +20,10 @@ def apply_transformation2D(image, animations, padding_mode="border"):
     angle = torch.tensor([animations["angle"]])
 
     transformed_img = Affine(
-        angle=angle, translation=translate, scale_factor=zoom, padding_mode=padding_mode
+        angle=angle,
+        translation=translate,
+        scale_factor=zoom,
+        padding_mode=padding_mode,
     )(image)
 
     return transformed_img
@@ -199,3 +202,8 @@ def save_video(frames, filename="./output.mp4", fps=24, quality=95, audio_input=
             video_array=img_tensors,
             fps=fps,
         )
+
+
+def save_parameters(save_path, parameters):
+    with open(f"{save_path}/parameters.json", "w") as f:
+        json.dump(parameters, f)
