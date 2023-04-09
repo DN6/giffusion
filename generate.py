@@ -27,7 +27,6 @@ from flows.flow_byop import BYOPFlow
 from utils import save_gif, save_video, save_parameters
 
 logger = logging.getLogger(__name__)
-hf_api = HfApi()
 
 # Disable denoising progress bar
 disable_progress_bar()
@@ -212,6 +211,8 @@ def run(
 
     if experiment:
         experiment.log_asset(output_filename)
+
+    save_parameters(run_path, parameters)
 
     return output_filename
 
