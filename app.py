@@ -124,6 +124,7 @@ def predict(
     mel_spectogram_reduce,
     image_input,
     video_input,
+    video_use_pil_format,
     output_format,
     model_name,
     additional_pipeline_arguments,
@@ -157,6 +158,7 @@ def predict(
         mel_spectogram_reduce=mel_spectogram_reduce,
         image_input=image_input,
         video_input=video_input,
+        video_use_pil_format=video_use_pil_format,
         output_format=output_format,
         model_name=model_name,
         additional_pipeline_arguments=additional_pipeline_arguments,
@@ -344,6 +346,7 @@ with demo:
             with gr.Accordion("Video Input", open=False):
                 video_input = gr.Video(label="Video Input")
                 video_info_btn = gr.Button(value="Get Key Frame Infomation")
+                video_use_pil_format = gr.Checkbox(label="Use PIL Format", value=False)
 
             with gr.Accordion("Resample Output", open=False):
                 with gr.Accordion("Send to Image Input", open=False):
@@ -404,6 +407,7 @@ with demo:
             mel_spectogram_reduce,
             image_input,
             video_input,
+            video_use_pil_format,
             output_format,
             model_name,
             additional_pipeline_arguments,

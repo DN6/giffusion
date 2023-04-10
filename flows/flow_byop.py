@@ -64,6 +64,7 @@ class BYOPFlow(BaseFlow):
         audio_component="both",
         audio_mel_spectogram_reduce="max",
         video_input=None,
+        video_use_pil_format=False,
         seed=42,
         batch_size=1,
         fps=10,
@@ -99,15 +100,17 @@ class BYOPFlow(BaseFlow):
         self.check_inputs(image_input, video_input)
         self.image_input = image_input
         self.video_input = video_input
+        self.video_use_pil_format = video_use_pil_format
 
         if self.video_input is not None:
             self.frames, _, _ = load_video_frames(self.video_input)
             _, self.height, self.width = self.frames[0].size()
-            key_frames = sync_prompts_to_video(text_prompts, self.frames)
+
+        elif self.image_input is not None:
+            self.height, self.width = self.image_input.size
 
         else:
             self.frames, self.frames, _, _ = (None, None, None, None)
-            key_frames = parse_key_frames(text_prompts)
             self.height, self.width = height, width
 
         if audio_input is not None:
@@ -124,6 +127,7 @@ class BYOPFlow(BaseFlow):
 
         self.audio_mel_reduce_func = get_mel_reduce_func(audio_mel_spectogram_reduce)
 
+        key_frames = parse_key_frames(text_prompts)
         last_frame, _ = max(key_frames, key=lambda x: x[0])
         self.max_frames = last_frame + 1
 
@@ -370,7 +374,12 @@ class BYOPFlow(BaseFlow):
                 latent_batch = torch.cat(latent_batch, dim=0)
 
                 if self.frames is not None:
-                    image_batch = torch.cat(image_batch, dim=0)
+                    if self.video_use_pil_format:
+                        image_batch = list(
+                            map(lambda x: ToPILImage()(x[0], image_batch))
+                        )
+                    else:
+                        image_batch = torch.cat(image_batch, dim=0)
 
                 yield {
                     "prompts": prompt_batch,
