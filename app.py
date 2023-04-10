@@ -101,13 +101,6 @@ def send_to_video_input(video):
     return video
 
 
-def display_interpolation_args(value):
-    if value != "linear":
-        return gr.update(visible=True)
-    else:
-        return gr.update(visible=False)
-
-
 def predict(
     pipe,
     text_prompt_input,
@@ -283,12 +276,7 @@ with demo:
                     label="Interpolation Type",
                 )
                 interpolation_args = gr.Textbox(
-                    "", label="Interpolation Arguments", visible=False
-                )
-                interpolation_type.change(
-                    display_interpolation_args,
-                    [interpolation_type],
-                    [interpolation_args],
+                    "", label="Interpolation Parameters", visible=True
                 )
 
                 zoom = gr.Textbox("", label="Zoom")
