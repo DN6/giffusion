@@ -14,6 +14,7 @@ from utils import (
     to_pil_image,
 )
 
+DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
@@ -424,4 +425,4 @@ with demo:
 
 if __name__ == "__main__":
     demo.queue(concurrency_count=2)
-    demo.launch(share=True, debug=True)
+    demo.launch(share=True, debug=DEBUG)
