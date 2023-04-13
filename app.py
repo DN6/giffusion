@@ -1,4 +1,5 @@
 import importlib
+import os
 import pathlib
 
 import gradio as gr
@@ -13,6 +14,8 @@ from utils import (
     to_pil_image,
 )
 
+DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
+OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
 
@@ -23,13 +26,11 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
             del pipe
             torch.cuda.empty_cache()
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
         if controlnet:
             from diffusers import ControlNetModel
 
             controlnet_model = ControlNetModel.from_pretrained(
-                controlnet, torch_dtype=torch.float16
+                controlnet, torch_dtype=torch.float16, cache_dir=OUTPUT_BASE_PATH
             )
             pipeline_name = "StableDiffusionControlNetPipeline"
 
@@ -40,6 +41,7 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
                 torch_dtype=torch.float16,
                 safety_checker=None,
                 controlnet=controlnet_model,
+                cache_dir=OUTPUT_BASE_PATH,
             )
 
         else:
@@ -49,6 +51,7 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
                 use_auth_token=True,
                 torch_dtype=torch.float16,
                 safety_checker=None,
+                cache_dir=OUTPUT_BASE_PATH,
             )
 
         pipe.enable_model_cpu_offload()
@@ -99,13 +102,6 @@ def send_to_video_input(video):
     return video
 
 
-def display_interpolation_args(value):
-    if value != "linear":
-        return gr.update(visible=True)
-    else:
-        return gr.update(visible=False)
-
-
 def predict(
     pipe,
     text_prompt_input,
@@ -129,6 +125,7 @@ def predict(
     mel_spectogram_reduce,
     image_input,
     video_input,
+    video_use_pil_format,
     output_format,
     model_name,
     additional_pipeline_arguments,
@@ -162,6 +159,7 @@ def predict(
         mel_spectogram_reduce=mel_spectogram_reduce,
         image_input=image_input,
         video_input=video_input,
+        video_use_pil_format=video_use_pil_format,
         output_format=output_format,
         model_name=model_name,
         additional_pipeline_arguments=additional_pipeline_arguments,
@@ -189,7 +187,7 @@ with demo:
                             label="Model Name", value="runwayml/stable-diffusion-v1-5"
                         )
                         pipeline_name = gr.Textbox(
-                            label="Model Name", value="DiffusionPipeline"
+                            label="Pipeline Name", value="DiffusionPipeline"
                         )
                         controlnet = gr.Textbox(label="ControlNet Checkpoint")
                     with gr.Column():
@@ -281,12 +279,7 @@ with demo:
                     label="Interpolation Type",
                 )
                 interpolation_args = gr.Textbox(
-                    "", label="Interpolation Arguments", visible=False
-                )
-                interpolation_type.change(
-                    display_interpolation_args,
-                    [interpolation_type],
-                    [interpolation_args],
+                    "", label="Interpolation Parameters", visible=True
                 )
 
                 zoom = gr.Textbox("", label="Zoom")
@@ -307,12 +300,18 @@ with demo:
 
         with gr.Column(elem_id="output", scale=2):
             output = gr.Video(label="Model Output", elem_id="output")
-            submit = gr.Button(
-                label="Submit",
-                value="Create",
-                variant="primary",
-                elem_id="submit-btn",
-            )
+            with gr.Row():
+                submit = gr.Button(
+                    label="Submit",
+                    value="Create",
+                    variant="primary",
+                    elem_id="submit-btn",
+                )
+                stop = gr.Button(
+                    label="Submit",
+                    value="Stop",
+                    elem_id="stop-btn",
+                )
             with gr.Row():
                 text_prompt_input = gr.Textbox(
                     lines=10,
@@ -348,6 +347,7 @@ with demo:
             with gr.Accordion("Video Input", open=False):
                 video_input = gr.Video(label="Video Input")
                 video_info_btn = gr.Button(value="Get Key Frame Infomation")
+                video_use_pil_format = gr.Checkbox(label="Use PIL Format", value=False)
 
             with gr.Accordion("Resample Output", open=False):
                 with gr.Accordion("Send to Image Input", open=False):
@@ -383,7 +383,7 @@ with demo:
     send_to_image_input_btn.click(send_to_image_input, [output, frame_id], image_input)
     send_to_video_input_btn.click(send_to_video_input, [output], [video_input])
 
-    submit.click(
+    submit_event = submit.click(
         fn=predict,
         inputs=[
             pipe,
@@ -408,6 +408,7 @@ with demo:
             mel_spectogram_reduce,
             image_input,
             video_input,
+            video_use_pil_format,
             output_format,
             model_name,
             additional_pipeline_arguments,
@@ -420,8 +421,8 @@ with demo:
         ],
         outputs=output,
     )
-
-demo.queue(concurrency_count=2)
+    stop.click(fn=None, inputs=None, outputs=None, cancels=[submit_event])
 
 if __name__ == "__main__":
-    demo.launch(share=True)
+    demo.queue(concurrency_count=2)
+    demo.launch(share=True, debug=DEBUG)

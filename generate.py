@@ -2,8 +2,8 @@ import logging
 import os
 import json
 from datetime import datetime
-
 import typer
+
 from diffusers.schedulers import (
     DDIMScheduler,
     DDPMScheduler,
@@ -17,13 +17,14 @@ from diffusers.schedulers import (
     RePaintScheduler,
     UniPCMultistepScheduler,
 )
+
 from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
 
 from comet import start_experiment
 from flows import BYOPFlow
 from flows.flow_byop import BYOPFlow
-from utils import save_gif, save_video
+from utils import save_gif, save_video, save_parameters
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,7 @@ def run(
     mel_spectogram_reduce="max",
     image_input=None,
     video_input=None,
+    video_use_pil_format=False,
     output_format="mp4",
     model_name="runwayml/stable-diffusion-v1-5",
     additional_pipeline_arguments="{}",
@@ -92,29 +94,44 @@ def run(
 
     run_name = datetime.today().strftime("%Y-%m-%d-%H:%M:%S")
     run_path = os.path.join(OUTPUT_BASE_PATH, run_name)
-    os.makedirs(run_path, exist_ok=True)
+    run_image_save_path = os.path.join(run_path, "imgs")
+    os.makedirs(run_image_save_path, exist_ok=True)
 
     device = pipe.device
 
-    if experiment:
-        parameters = {
-            "text_prompt_inputs": text_prompt_inputs,
-            "negative_prompt_inputs": negative_prompt_inputs,
-            "num_inference_steps": num_inference_steps,
-            "guidance_scale": guidance_scale,
-            "scheduler": scheduler,
-            "seed": seed,
-            "fps": fps,
-            "use_fixed_latent": use_fixed_latent,
-            "use_prompt_embeds": use_prompt_embeds,
-            "audio_component": audio_component,
-            "output_format": output_format,
-            "pipeline_name": pipe.__class__.__name__,
-            "model_name": model_name,
-        }
-        if (video_input is not None) or (image_input is not None):
-            parameters.update({"strength": strength})
+    parameters = {
+        "text_prompt_inputs": text_prompt_inputs,
+        "negative_prompt_inputs": negative_prompt_inputs,
+        "num_inference_steps": num_inference_steps,
+        "guidance_scale": guidance_scale,
+        "batch_size": batch_size,
+        "scheduler": scheduler,
+        "use_default_scheduler": use_default_scheduler,
+        "num_latent_channels": num_latent_channels,
+        "seed": seed,
+        "fps": fps,
+        "use_fixed_latent": use_fixed_latent,
+        "use_prompt_embeds": use_prompt_embeds,
+        "audio_component": audio_component,
+        "mel_spectogram_reduce": mel_spectogram_reduce,
+        "output_format": output_format,
+        "pipeline_name": pipe.__class__.__name__,
+        "model_name": model_name,
+        "scheduler_kwargs": scheduler_kwargs,
+        "additional_pipeline_arguments": additional_pipeline_arguments,
+        "interpolation_type": interpolation_type,
+        "interpolation_args": interpolation_args,
+        "zoom": zoom,
+        "translate_x": translate_x,
+        "translate_y": translate_y,
+        "angle": angle,
+    }
+    save_parameters(run_path, parameters)
 
+    if (video_input is not None) or (image_input is not None):
+        parameters.update({"strength": strength})
+
+    if experiment:
         experiment.log_parameters(parameters)
 
     if not use_default_scheduler:
@@ -154,6 +171,7 @@ def run(
         audio_component=audio_component,
         audio_mel_spectogram_reduce=mel_spectogram_reduce,
         video_input=video_input,
+        video_use_pil_format=video_use_pil_format,
         seed=seed,
         batch_size=batch_size,
         fps=fps,
@@ -172,7 +190,7 @@ def run(
     for output in tqdm(image_generator, total=max_frames // flow.batch_size):
         images = output.images
         for image in images:
-            img_save_path = f"{run_path}/{frame_idx:04d}.png"
+            img_save_path = f"{run_image_save_path}/{frame_idx:04d}.png"
             image.save(img_save_path)
             output_frames.append(img_save_path)
 
@@ -195,6 +213,8 @@ def run(
 
     if experiment:
         experiment.log_asset(output_filename)
+
+    save_parameters(run_path, parameters)
 
     return output_filename
 
