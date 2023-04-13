@@ -102,15 +102,15 @@ class BYOPFlow(BaseFlow):
         self.video_input = video_input
         self.video_use_pil_format = video_use_pil_format
 
+        self.video_frames = None
         if self.video_input is not None:
-            self.frames, _, _ = load_video_frames(self.video_input)
-            _, self.height, self.width = self.frames[0].size()
+            self.video_frames, _, _ = load_video_frames(self.video_input)
+            _, self.height, self.width = self.video_frames[0].size()
 
         elif self.image_input is not None:
             self.height, self.width = self.image_input.size
 
         else:
-            self.frames, self.frames, _, _ = (None, None, None, None)
             self.height, self.width = height, width
 
         if audio_input is not None:
@@ -356,40 +356,34 @@ class BYOPFlow(BaseFlow):
         return output
 
     def batch_generator(self, frames, batch_size):
-        prompt_batch = []
-        latent_batch = []
-        image_batch = []
+        for frame_idx in range(0, len(frames), batch_size):
+            start = frame_idx
+            end = frame_idx + batch_size
 
-        for frame_idx in frames:
-            prompt_batch.append(self.prompts[frame_idx])
-            latent_batch.append(self.init_latents[frame_idx])
+            frame_batch = frames[start:end]
+            prompts = list(map(lambda x: self.prompts[x], frame_batch))
+            if self.use_prompt_embeds:
+                prompts = torch.cat(prompts, dim=0)
 
-            if self.frames is not None:
-                image_batch.append(self.frames[frame_idx].unsqueeze(0))
+            latents = list(map(lambda x: self.init_latents[x], frame_batch))
+            latents = torch.cat(latents, dim=0)
 
-            if len(prompt_batch) % batch_size == 0:
-                if self.use_prompt_embeds:
-                    prompt_batch = torch.cat(prompt_batch, dim=0)
+            if self.video_frames is not None:
+                images = list(
+                    map(lambda x: self.video_frames[x].unsqueeze(0), frame_batch)
+                )
+                if self.video_use_pil_format:
+                    images = list(map(lambda x: ToPILImage()(x[0], images)))
+                else:
+                    images = torch.cat(images, dim=0)
+            else:
+                images = []
 
-                latent_batch = torch.cat(latent_batch, dim=0)
-
-                if self.frames is not None:
-                    if self.video_use_pil_format:
-                        image_batch = list(
-                            map(lambda x: ToPILImage()(x[0], image_batch))
-                        )
-                    else:
-                        image_batch = torch.cat(image_batch, dim=0)
-
-                yield {
-                    "prompts": prompt_batch,
-                    "init_latents": latent_batch,
-                    "images": image_batch,
-                }
-
-                prompt_batch = []
-                latent_batch = []
-                image_batch = []
+            yield {
+                "prompts": prompts,
+                "init_latents": latents,
+                "images": images,
+            }
 
     def prepare_inputs(self, batch):
         prompts = batch["prompts"]
