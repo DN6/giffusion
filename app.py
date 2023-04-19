@@ -20,6 +20,8 @@ prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
 
 def load_pipeline(model_name, pipeline_name, controlnet, pipe):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     try:
         # clear existing model from memory
         if pipe is not None:
@@ -54,7 +56,11 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
                 cache_dir=OUTPUT_BASE_PATH,
             )
 
-        pipe.enable_model_cpu_offload()
+        if hasattr(pipe, "enable_model_cpu_offload"):
+            pipe.enable_model_cpu_offload()
+        else:
+            pipe.to(device)
+
         pipe.enable_xformers_memory_efficient_attention()
 
         return pipe, f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
