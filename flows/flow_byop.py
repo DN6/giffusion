@@ -373,7 +373,7 @@ class BYOPFlow(BaseFlow):
                     map(lambda x: self.video_frames[x].unsqueeze(0), frame_batch)
                 )
                 if self.video_use_pil_format:
-                    images = list(map(lambda x: ToPILImage()(x[0], images)))
+                    images = list(map(lambda x: ToPILImage()(x[0]), images))
                 else:
                     images = torch.cat(images, dim=0)
             else:
