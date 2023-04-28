@@ -61,6 +61,9 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
         else:
             pipe.to(device)
 
+        if hasattr(pipe, "enable_vae_tiling"):
+            pipe.enable_vae_tiling()
+
         pipe.enable_xformers_memory_efficient_attention()
 
         return pipe, f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
@@ -141,6 +144,8 @@ def predict(
     translate_x,
     translate_y,
     angle,
+    coherence_scale,
+    coherence_alpha,
 ):
     output = run(
         pipe=pipe,
@@ -175,6 +180,8 @@ def predict(
         translate_x=translate_x,
         translate_y=translate_y,
         angle=angle,
+        coherence_scale=coherence_scale,
+        coherence_alpha=coherence_alpha,
     )
 
     return output
@@ -292,6 +299,12 @@ with demo:
                 translate_x = gr.Textbox("", label="Translate_X")
                 translate_y = gr.Textbox("", label="Translate_Y")
                 angle = gr.Textbox("", label="Angle")
+                coherence_scale = gr.Slider(
+                    0, 10000, step=50, value=300, label="Coherence Scale"
+                )
+                coherence_alpha = gr.Slider(
+                    0, 1.0, step=0.1, value=0.1, label="Coherence Alpha"
+                )
 
             with gr.Accordion("Inspiration Settings", open=False):
                 with gr.Row():
@@ -424,6 +437,8 @@ with demo:
             translate_x,
             translate_y,
             angle,
+            coherence_scale,
+            coherence_alpha,
         ],
         outputs=output,
     )

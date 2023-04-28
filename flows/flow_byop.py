@@ -1,3 +1,4 @@
+import copy
 import inspect
 import json
 import random
@@ -6,7 +7,10 @@ import librosa
 import numpy as np
 import pandas as pd
 import torch
+from diffusers import ImagePipelineOutput
+from skimage.exposure import match_histograms
 from torchvision.transforms import ToPILImage, ToTensor
+
 from utils import (
     apply_transformation2D,
     curve_from_cn_string,
@@ -42,7 +46,35 @@ class AnimationCallback:
             "angle": self.angle[frame_idx],
         }
         transformed = apply_transformation2D(image_tensor, animations)
-        return transformed
+        output_image = ToPILImage(mode="RGB")(transformed[0])
+
+        return output_image
+
+
+class CoherenceCallback:
+    def __init__(self, init_latent=None, coherence_scale=1.5, coherence_alpha=0.0):
+        self.init_latent = init_latent
+        self.coherence_scale = coherence_scale
+        self.coherence_alpha = coherence_alpha
+
+    def apply_coherence_guidance(self, latents):
+        loss = (latents - self.init_latent).pow(2).mean()
+        cond_grad = torch.autograd.grad(loss, latents)[0]
+
+        latents = latents.detach() - (self.coherence_scale * cond_grad)
+
+        return latents
+
+    def __call__(self, latents):
+        latents.requires_grad = True
+        with torch.enable_grad():
+            latents = self.apply_coherence_guidance(latents)
+
+        self.init_latent = (self.coherence_alpha * latents) + (
+            1 - self.coherence_alpha
+        ) * self.init_latent
+
+        return latents
 
 
 class BYOPFlow(BaseFlow):
@@ -73,6 +105,8 @@ class BYOPFlow(BaseFlow):
         interpolation_type="linear",
         interpolation_args="",
         animation_args=None,
+        coherence_scale=350,
+        coherence_alpha=1.0,
     ):
         super().__init__(pipe, device, batch_size)
 
@@ -98,7 +132,7 @@ class BYOPFlow(BaseFlow):
         self.fps = fps
 
         self.check_inputs(image_input, video_input)
-        self.image_input = image_input
+        self.image_input = self.reference_image = image_input
         self.video_input = video_input
         self.video_use_pil_format = video_use_pil_format
 
@@ -147,13 +181,18 @@ class BYOPFlow(BaseFlow):
             self.prompts = self.get_prompts(key_frames)
 
         animation_args = self.prep_animation_args(animation_args)
+        self.use_coherence = coherence_scale > 0.0
         if animation_args:
             if self.batch_size != 1:
                 raise ValueError(
                     f"In order to use Animation Arguments",
                     f"batch size must be set to 1 but found batch size {self.batch_size}",
                 )
+
             self.animation_callback = AnimationCallback(animation_args)
+            self.coherence_callback = CoherenceCallback(
+                coherence_scale=coherence_scale, coherence_alpha=coherence_alpha
+            )
             self.animate = True
         else:
             self.animate = False
@@ -431,10 +470,31 @@ class BYOPFlow(BaseFlow):
 
         return pipe_kwargs
 
+    def get_reference_image(self, image_input):
+        if not self.reference_image:
+            self.reference_image = image_input
+
+        return self.reference_image
+
     @torch.no_grad()
     def apply_animation(self, image, idx):
         image_input = self.animation_callback(image, idx)
-        self.image_input = ToPILImage(mode="RGB")(image_input[0])
+
+        # Colour match the transformed image to the reference
+        reference_image = self.get_reference_image(image_input)
+        image_input = match_histograms(
+            np.array(image_input), np.array(reference_image), channel_axis=-1
+        )
+        image_input = ToPILImage()(image_input)
+
+        self.image_input = image_input
+
+    def apply_coherence(self, latents):
+        if not self.coherence_callback.init_latent:
+            self.coherence_callback.init_latent = latents
+
+        latents = self.coherence_callback(latents)
+        return latents
 
     def create(self, frames=None):
         batchgen = self.batch_generator(
@@ -444,10 +504,18 @@ class BYOPFlow(BaseFlow):
         for batch_idx, batch in enumerate(batchgen):
             pipe_kwargs = self.prepare_inputs(batch)
             with torch.autocast("cuda"):
-                output = self.pipe(**pipe_kwargs)
+                output = self.pipe(**pipe_kwargs, output_type="latent")
+                latents = output.images
+
+            if self.use_coherence:
+                latents = self.apply_coherence(latents)
+
+            image = self.pipe.decode_latents(latents)
+            image = self.pipe.image_processor.postprocess(
+                image.detach(), output_type="pil"
+            )
+
+            yield ImagePipelineOutput(images=image)
 
             if self.animate:
-                image = output.images[0]
                 self.apply_animation(image, batch_idx)
-
-            yield output

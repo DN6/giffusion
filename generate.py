@@ -1,9 +1,9 @@
+import json
 import logging
 import os
-import json
 from datetime import datetime
-import typer
 
+import typer
 from diffusers.schedulers import (
     DDIMScheduler,
     DDPMScheduler,
@@ -17,14 +17,13 @@ from diffusers.schedulers import (
     RePaintScheduler,
     UniPCMultistepScheduler,
 )
-
 from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
 
 from comet import start_experiment
 from flows import BYOPFlow
 from flows.flow_byop import BYOPFlow
-from utils import save_gif, save_video, save_parameters
+from utils import save_gif, save_parameters, save_video
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +83,8 @@ def run(
     translate_x="",
     translate_y="",
     angle="",
+    coherence_scale=300,
+    coherence_alpha=1.0,
 ):
     if pipe is None:
         raise ValueError(
@@ -179,6 +180,8 @@ def run(
         interpolation_type=interpolation_type,
         interpolation_args=interpolation_args,
         animation_args=animation_args,
+        coherence_scale=coherence_scale,
+        coherence_alpha=coherence_alpha,
     )
 
     max_frames = flow.max_frames
