@@ -71,7 +71,7 @@ class CoherenceCallback:
             latents = self.apply_coherence_guidance(latents)
 
         self.init_latent = (self.coherence_alpha * latents) + (
-            1 - self.coherence_alpha
+            1.0 - self.coherence_alpha
         ) * self.init_latent
 
         return latents
@@ -471,7 +471,7 @@ class BYOPFlow(BaseFlow):
         return pipe_kwargs
 
     def get_reference_image(self, image_input):
-        if not self.reference_image:
+        if self.reference_image is None:
             self.reference_image = image_input
 
         return self.reference_image
@@ -490,7 +490,7 @@ class BYOPFlow(BaseFlow):
         self.image_input = image_input
 
     def apply_coherence(self, latents):
-        if not self.coherence_callback.init_latent:
+        if self.coherence_callback.init_latent is None:
             self.coherence_callback.init_latent = latents
 
         latents = self.coherence_callback(latents)
@@ -507,15 +507,13 @@ class BYOPFlow(BaseFlow):
                 output = self.pipe(**pipe_kwargs, output_type="latent")
                 latents = output.images
 
-            if self.use_coherence:
-                latents = self.apply_coherence(latents)
+                if self.animate and self.use_coherence:
+                    latents = self.apply_coherence(latents)
 
-            image = self.pipe.decode_latents(latents)
-            image = self.pipe.image_processor.postprocess(
-                image.detach(), output_type="pil"
-            )
+                image = self.pipe.decode_latents(latents)
+                image = self.pipe.image_processor.postprocess(image, output_type="pil")
 
             yield ImagePipelineOutput(images=image)
 
             if self.animate:
-                self.apply_animation(image, batch_idx)
+                self.apply_animation(image[0], batch_idx)
