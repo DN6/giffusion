@@ -20,14 +20,60 @@ class BaseFlow:
         image = to_tensor(image)
         return 2.0 * image - 1.0
 
-    def postprocess(self, image_tensors):
-        image_tensors = (image_tensors / 2 + 0.5).clamp(0, 1)
-        image_tensors = (image_tensors * 255).to(torch.uint8)
-        image_tensors = image_tensors.permute(0, 2, 3, 1)
+    @staticmethod
+    def numpy_to_pil(images):
+        """
+        Convert a numpy image or a batch of images to a PIL image.
+        """
+        if images.ndim == 3:
+            images = images[None, ...]
+        images = (images * 255).round().astype("uint8")
+        if images.shape[-1] == 1:
+            # special case for grayscale (single channel) images
+            pil_images = [
+                Image.fromarray(image.squeeze(), mode="L") for image in images
+            ]
+        else:
+            pil_images = [Image.fromarray(image) for image in images]
 
-        image_arrays = image_tensors.cpu().numpy()
+        return pil_images
 
-        return image_arrays
+    @staticmethod
+    def numpy_to_pt(images):
+        """
+        Convert a numpy image to a pytorch tensor
+        """
+        if images.ndim == 3:
+            images = images[..., None]
+
+        images = torch.from_numpy(images.transpose(0, 3, 1, 2))
+        return images
+
+    @staticmethod
+    def pt_to_numpy(images):
+        """
+        Convert a numpy image to a pytorch tensor
+        """
+        images = images.cpu().permute(0, 2, 3, 1).float().numpy()
+        return images
+
+    def postprocess(
+        self,
+        image,
+        output_type: str = "pil",
+    ):
+        if isinstance(image, torch.Tensor) and output_type == "pt":
+            return image
+
+        if isinstance(image, torch.Tensor):
+            image = self.pt_to_numpy(image)
+
+        if output_type == "np":
+            return image
+        elif output_type == "pil":
+            return self.numpy_to_pil(image)
+        else:
+            raise ValueError(f"Unsupported output_type {output_type}.")
 
     def numpy_to_pil(self, images):
         """
@@ -141,7 +187,6 @@ class BaseFlow:
         offset=1,
         eta=0.0,
     ):
-
         self.pipe.scheduler.set_timesteps(num_inference_steps)
         self.pipe.scheduler.config.steps_offset = 1
 
