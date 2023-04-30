@@ -1,6 +1,4 @@
-import copy
 import inspect
-import json
 import random
 
 import librosa
@@ -18,7 +16,6 @@ from utils import (
     load_video_frames,
     parse_key_frames,
     slerp,
-    sync_prompts_to_video,
 )
 
 from .flow_base import BaseFlow
@@ -109,7 +106,6 @@ class BYOPFlow(BaseFlow):
         coherence_alpha=1.0,
     ):
         super().__init__(pipe, device, batch_size)
-
         self.pipe_signature = set(inspect.signature(self.pipe).parameters.keys())
 
         self.text_prompts = text_prompts
@@ -504,16 +500,21 @@ class BYOPFlow(BaseFlow):
         for batch_idx, batch in enumerate(batchgen):
             pipe_kwargs = self.prepare_inputs(batch)
             with torch.autocast("cuda"):
-                output = self.pipe(**pipe_kwargs, output_type="latent")
-                latents = output.images
-
                 if self.animate and self.use_coherence:
+                    output = self.pipe(**pipe_kwargs, output_type="latent")
+                    latents = output.images
                     latents = self.apply_coherence(latents)
 
-                image = self.pipe.decode_latents(latents)
-                image = self.pipe.image_processor.postprocess(image, output_type="pil")
+                    with torch.no_grad():
+                        image = self.pipe.decode_latents(latents)
 
-            yield ImagePipelineOutput(images=image)
+                    image = self.postprocess(image, output_type="pil")
+                    yield ImagePipelineOutput(images=image)
 
-            if self.animate:
-                self.apply_animation(image[0], batch_idx)
+                else:
+                    output = self.pipe(**pipe_kwargs)
+                    yield output
+                    image = output.images
+
+                if self.animate:
+                    self.apply_animation(image[0], batch_idx)
