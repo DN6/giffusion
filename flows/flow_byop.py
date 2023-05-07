@@ -48,9 +48,8 @@ class AnimationCallback:
         transformed = apply_transformation2D(
             image_tensor,
             animations,
-            padding_mode=-1.0 * torch.ones(3)
-            if self.preprocess == "inpainting"
-            else "border",
+            padding_mode="fill" if self.preprocess == "inpainting" else "border",
+            fill_value=-1.0 * torch.ones(3),
         )
         image_tensor = apply_preprocessing(image_tensor, self.preprocess)
         _, c, h, w = transformed.shape

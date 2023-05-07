@@ -4,8 +4,6 @@ from kornia.filters import canny
 from PIL import Image
 from torchvision.transforms import ToPILImage, ToTensor
 
-preprocessors = {"canny": apply_canny}
-
 
 def apply_canny(image):
     _, transformed = canny(image)
@@ -21,3 +19,6 @@ def apply_preprocessing(image, preprocessor):
     output = fn(image)
 
     return output
+
+
+preprocessors = {"canny": apply_canny}

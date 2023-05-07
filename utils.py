@@ -5,13 +5,18 @@ import librosa
 import numpy as np
 import torch
 from keyframed.dsl import curve_from_cn_string
-from kornia.geometry.transform import Affine
+from kornia.geometry.transform import Affine, get_affine_matrix2d, warp_affine
 from PIL import Image
 from torchvision.io import read_video, write_video
 from torchvision.transforms.functional import pil_to_tensor, to_pil_image
 
 
-def apply_transformation2D(image, animations, padding_mode="zero"):
+def apply_transformation2D(
+    image, animations, padding_mode="border", fill_value=torch.zeros(3)
+):
+    _, c, h, w = image.shape
+    center = torch.tensor((h // 2, w // 2)).unsqueeze(0)
+
     zoom = torch.tensor([animations["zoom"], animations["zoom"]]).unsqueeze(0)
 
     translate_x = animations["translate_x"]
@@ -20,12 +25,12 @@ def apply_transformation2D(image, animations, padding_mode="zero"):
     translate = torch.tensor((translate_x, translate_y)).unsqueeze(0)
     angle = torch.tensor([animations["angle"]])
 
-    transformed_img = Affine(
-        angle=angle,
-        translation=translate,
-        scale_factor=zoom,
-        padding_mode=padding_mode,
-    )(image)
+    M = get_affine_matrix2d(
+        center=center, translations=translate, angle=angle, scale=zoom
+    )
+    transformed_img = warp_affine(
+        image, M=M, padding_mode=padding_mode, fill_value=fill_value
+    )
 
     return transformed_img
 
