@@ -9,6 +9,7 @@ from diffusers import ImagePipelineOutput
 from skimage.exposure import match_histograms
 from torchvision.transforms import ToPILImage, ToTensor
 
+from preprocessor import apply_preprocessing
 from utils import (
     apply_transformation2D,
     curve_from_cn_string,
@@ -22,7 +23,7 @@ from .flow_base import BaseFlow
 
 
 class AnimationCallback:
-    def __init__(self, animation_args):
+    def __init__(self, animation_args, preprocess=None):
         self.zoom = animation_args.get("zoom", curve_from_cn_string("0:(1.0)"))
         self.translate_x = animation_args.get(
             "translate_x", curve_from_cn_string("0:(0.0)")
@@ -31,6 +32,7 @@ class AnimationCallback:
             "translate_y", curve_from_cn_string("0:(0.0)")
         )
         self.angle = animation_args.get("angle", curve_from_cn_string("0:(0.0)"))
+        self.preprocess = preprocess
 
     def __call__(self, image, frame_idx):
         image_tensor = ToTensor()(image)
@@ -42,8 +44,18 @@ class AnimationCallback:
             "translate_y": self.translate_y[frame_idx],
             "angle": self.angle[frame_idx],
         }
-        transformed = apply_transformation2D(image_tensor, animations)
-        output_image = ToPILImage(mode="RGB")(transformed[0])
+
+        transformed = apply_transformation2D(
+            image_tensor,
+            animations,
+            padding_mode=-1.0 * torch.ones(3)
+            if self.preprocess == "inpainting"
+            else "border",
+        )
+        image_tensor = apply_preprocessing(image_tensor, self.preprocess)
+        _, c, h, w = transformed.shape
+
+        output_image = ToPILImage("L" if c == 1 else "RGB")(transformed[0])
 
         return output_image
 
@@ -104,6 +116,8 @@ class BYOPFlow(BaseFlow):
         animation_args=None,
         coherence_scale=350,
         coherence_alpha=1.0,
+        apply_color_matching=True,
+        preprocess=None,
     ):
         super().__init__(pipe, device, batch_size)
         self.pipe_signature = set(inspect.signature(self.pipe).parameters.keys())
@@ -127,8 +141,11 @@ class BYOPFlow(BaseFlow):
 
         self.fps = fps
 
+        self.preprocess = preprocess
         self.check_inputs(image_input, video_input)
         self.image_input = self.reference_image = image_input
+        self.image_input = apply_preprocessing(self.image_input, self.preprocess)
+
         self.video_input = video_input
         self.video_use_pil_format = video_use_pil_format
 
@@ -136,6 +153,8 @@ class BYOPFlow(BaseFlow):
         if self.video_input is not None:
             self.video_frames, _, _ = load_video_frames(self.video_input)
             _, self.height, self.width = self.video_frames[0].size()
+
+            self.video_frames = apply_preprocessing(self.video_frames, self.preprocess)
 
         elif self.image_input is not None:
             self.height, self.width = self.image_input.size
@@ -177,7 +196,6 @@ class BYOPFlow(BaseFlow):
             self.prompts = self.get_prompts(key_frames)
 
         animation_args = self.prep_animation_args(animation_args)
-        self.use_coherence = coherence_scale > 0.0
         if animation_args:
             if self.batch_size != 1:
                 raise ValueError(
@@ -185,13 +203,17 @@ class BYOPFlow(BaseFlow):
                     f"batch size must be set to 1 but found batch size {self.batch_size}",
                 )
 
-            self.animation_callback = AnimationCallback(animation_args)
+            self.animation_callback = AnimationCallback(
+                animation_args, preprocess=self.preprocess
+            )
             self.coherence_callback = CoherenceCallback(
                 coherence_scale=coherence_scale, coherence_alpha=coherence_alpha
             )
             self.animate = True
         else:
             self.animate = False
+        self.use_coherence = self.animate and coherence_scale > 0.0
+        self.apply_color_matching = apply_color_matching
 
     def check_inputs(self, image_input, video_input):
         if image_input is not None and video_input is not None:
@@ -476,6 +498,10 @@ class BYOPFlow(BaseFlow):
     def apply_animation(self, image, idx):
         image_input = self.animation_callback(image, idx)
 
+        if not self.apply_color_matching:
+            self.image_input = image_input
+            return
+
         # Colour match the transformed image to the reference
         reference_image = self.get_reference_image(image_input)
         image_input = match_histograms(
@@ -500,7 +526,7 @@ class BYOPFlow(BaseFlow):
         for batch_idx, batch in enumerate(batchgen):
             pipe_kwargs = self.prepare_inputs(batch)
             with torch.autocast("cuda"):
-                if self.animate and self.use_coherence:
+                if self.use_coherence:
                     output = self.pipe(**pipe_kwargs, output_type="latent")
                     latents = output.images
                     latents = self.apply_coherence(latents)

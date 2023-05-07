@@ -85,6 +85,8 @@ def run(
     angle="",
     coherence_scale=300,
     coherence_alpha=1.0,
+    apply_color_matching=False,
+    preprocess=None,
 ):
     if pipe is None:
         raise ValueError(
@@ -182,6 +184,8 @@ def run(
         animation_args=animation_args,
         coherence_scale=coherence_scale,
         coherence_alpha=coherence_alpha,
+        apply_color_matching=apply_color_matching,
+        preprocess=preprocess,
     )
 
     max_frames = flow.max_frames

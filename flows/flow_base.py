@@ -75,16 +75,6 @@ class BaseFlow:
         else:
             raise ValueError(f"Unsupported output_type {output_type}.")
 
-    def numpy_to_pil(self, images):
-        """
-        Convert a numpy image or a batch of images to a PIL image.
-        """
-        if images.ndim == 3:
-            images = images[None, ...]
-        pil_images = [Image.fromarray(image) for image in images]
-
-        return pil_images
-
     @torch.no_grad()
     def decode_latents(self, latents):
         return self.pipe.decode_latents(latents)

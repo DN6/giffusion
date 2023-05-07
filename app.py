@@ -146,6 +146,8 @@ def predict(
     angle,
     coherence_scale,
     coherence_alpha,
+    apply_color_matching,
+    preprocessing_type,
 ):
     output = run(
         pipe=pipe,
@@ -182,6 +184,8 @@ def predict(
         angle=angle,
         coherence_scale=coherence_scale,
         coherence_alpha=coherence_alpha,
+        apply_color_matching=apply_color_matching,
+        preprocess=preprocessing_type,
     )
 
     return output
@@ -305,6 +309,9 @@ with demo:
                 coherence_alpha = gr.Slider(
                     0, 1.0, step=0.1, value=0.1, label="Coherence Alpha"
                 )
+                apply_color_matching = gr.Checkbox(
+                    label="Use Color Matching", value=False, interactive=True
+                )
 
             with gr.Accordion("Inspiration Settings", open=False):
                 with gr.Row():
@@ -375,6 +382,11 @@ with demo:
                 with gr.Accordion("Send to Video Input", open=False):
                     send_to_video_input_btn = gr.Button("Send to Video Input")
 
+            with gr.Accordion("Preprocessing Settings", open=False):
+                preprocessing_type = gr.Dropdown(
+                    ["canny", "inpainting"], value=None, label="Preprocessing"
+                )
+
     pipe = gr.State()
 
     load_pipeline_btn.click(
@@ -439,6 +451,8 @@ with demo:
             angle,
             coherence_scale,
             coherence_alpha,
+            apply_color_matching,
+            preprocessing_type,
         ],
         outputs=output,
     )

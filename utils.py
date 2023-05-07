@@ -1,5 +1,6 @@
-import re
 import json
+import re
+
 import librosa
 import numpy as np
 import torch
@@ -10,7 +11,7 @@ from torchvision.io import read_video, write_video
 from torchvision.transforms.functional import pil_to_tensor, to_pil_image
 
 
-def apply_transformation2D(image, animations, padding_mode="border"):
+def apply_transformation2D(image, animations, padding_mode="zero"):
     zoom = torch.tensor([animations["zoom"], animations["zoom"]]).unsqueeze(0)
 
     translate_x = animations["translate_x"]
