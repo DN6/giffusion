@@ -382,7 +382,7 @@ with demo:
                 with gr.Accordion("Send to Video Input", open=False):
                     send_to_video_input_btn = gr.Button("Send to Video Input")
 
-            with gr.Accordion("Preprocessing Settings", open=False):
+            with gr.Accordion("Controlnet Preprocessing Settings", open=False):
                 preprocessing_type = gr.Dropdown(
                     ["canny", "inpainting"], value=None, label="Preprocessing"
                 )

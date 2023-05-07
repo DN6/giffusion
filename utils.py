@@ -15,7 +15,7 @@ def apply_transformation2D(
     image, animations, padding_mode="border", fill_value=torch.zeros(3)
 ):
     _, c, h, w = image.shape
-    center = torch.tensor((h // 2, w // 2)).unsqueeze(0)
+    center = torch.tensor((h / 2, w / 2)).unsqueeze(0)
 
     zoom = torch.tensor([animations["zoom"], animations["zoom"]]).unsqueeze(0)
 
@@ -29,7 +29,11 @@ def apply_transformation2D(
         center=center, translations=translate, angle=angle, scale=zoom
     )
     transformed_img = warp_affine(
-        image, M=M, padding_mode=padding_mode, fill_value=fill_value
+        image,
+        M=M[:, :2],
+        dsize=image.shape[2:],
+        padding_mode=padding_mode,
+        fill_value=fill_value,
     )
 
     return transformed_img

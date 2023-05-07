@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 from diffusers import ImagePipelineOutput
+from PIL import Image
 from skimage.exposure import match_histograms
 from torchvision.transforms import ToPILImage, ToTensor
 
@@ -51,12 +52,9 @@ class AnimationCallback:
             padding_mode="fill" if self.preprocess == "inpainting" else "border",
             fill_value=-1.0 * torch.ones(3),
         )
-        image_tensor = apply_preprocessing(image_tensor, self.preprocess)
-        _, c, h, w = transformed.shape
+        output_image_tensor = apply_preprocessing(transformed, self.preprocess)
 
-        output_image = ToPILImage("L" if c == 1 else "RGB")(transformed[0])
-
-        return output_image
+        return output_image_tensor
 
 
 class CoherenceCallback:
@@ -142,8 +140,11 @@ class BYOPFlow(BaseFlow):
 
         self.preprocess = preprocess
         self.check_inputs(image_input, video_input)
-        self.image_input = self.reference_image = image_input
-        self.image_input = apply_preprocessing(self.image_input, self.preprocess)
+        self.reference_image = image_input
+        self.image_input = apply_preprocessing(
+            ToTensor()(image_input).unsqueeze(0), self.preprocess
+        )
+        self.image_input /= 255.0
 
         self.video_input = video_input
         self.video_use_pil_format = video_use_pil_format
@@ -478,7 +479,11 @@ class BYOPFlow(BaseFlow):
                 pipe_kwargs.update({"image": images})
 
             elif self.image_input is not None:
-                pipe_kwargs.update({"image": [self.image_input] * len(prompts)})
+                if isinstance(self.image_input, Image):
+                    image_batch = [self.image_input] * len(prompts)
+                else:
+                    image_batch = self.image_input
+                pipe_kwargs.update({"image": image_batch})
 
         if "generator" in self.pipe_signature:
             pipe_kwargs.update({"generator": self.generator})
@@ -498,15 +503,18 @@ class BYOPFlow(BaseFlow):
         image_input = self.animation_callback(image, idx)
 
         if not self.apply_color_matching:
+            image_input /= 255.0
             self.image_input = image_input
             return
 
         # Colour match the transformed image to the reference
         reference_image = self.get_reference_image(image_input)
         image_input = match_histograms(
-            np.array(image_input), np.array(reference_image), channel_axis=-1
+            np.array(image_input[0]), np.array(reference_image), channel_axis=-1
         )
-        image_input = ToPILImage()(image_input)
+        image_input = ToTensor()(image_input)
+        image_input /= 255.0
+        image_input = image_input.unsqueeze(0)
 
         self.image_input = image_input
 
