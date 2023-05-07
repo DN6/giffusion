@@ -503,17 +503,15 @@ class BYOPFlow(BaseFlow):
         image_input = self.animation_callback(image, idx)
 
         if not self.apply_color_matching:
-            image_input /= 255.0
             self.image_input = image_input
             return
 
-        # Colour match the transformed image to the reference
+        # Color match the transformed image to the reference
         reference_image = self.get_reference_image(image_input)
         image_input = match_histograms(
-            np.array(image_input[0]), np.array(reference_image), channel_axis=-1
+            np.array(image_input[0]) * 255, np.array(reference_image), channel_axis=-1
         )
         image_input = ToTensor()(image_input)
-        image_input /= 255.0
         image_input = image_input.unsqueeze(0)
 
         self.image_input = image_input
