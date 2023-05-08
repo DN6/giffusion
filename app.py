@@ -384,7 +384,7 @@ with demo:
 
             with gr.Accordion("Controlnet Preprocessing Settings", open=False):
                 preprocessing_type = gr.Dropdown(
-                    ["canny", "inpainting"], value=None, label="Preprocessing"
+                    ["canny", "inpainting", "None"], value="None", label="Preprocessing"
                 )
 
     pipe = gr.State()

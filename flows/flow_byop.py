@@ -114,7 +114,7 @@ class BYOPFlow(BaseFlow):
         coherence_scale=350,
         coherence_alpha=1.0,
         apply_color_matching=True,
-        preprocess=None,
+        preprocess="None",
     ):
         super().__init__(pipe, device, batch_size)
         self.pipe_signature = set(inspect.signature(self.pipe).parameters.keys())
@@ -140,11 +140,14 @@ class BYOPFlow(BaseFlow):
 
         self.preprocess = preprocess
         self.check_inputs(image_input, video_input)
-        self.reference_image = image_input
-        self.image_input = apply_preprocessing(
-            ToTensor()(image_input).unsqueeze(0), self.preprocess
-        )
-        self.image_input /= 255.0
+
+        if image_input is not None:
+            self.reference_image = image_input.convert("RGB")
+            self.image_input = apply_preprocessing(
+                ToTensor()(image_input).unsqueeze(0), self.preprocess
+            )
+        else:
+            self.reference_image = self.image_input = None
 
         self.video_input = video_input
         self.video_use_pil_format = video_use_pil_format
@@ -157,7 +160,7 @@ class BYOPFlow(BaseFlow):
             self.video_frames = apply_preprocessing(self.video_frames, self.preprocess)
 
         elif self.image_input is not None:
-            self.height, self.width = self.image_input.size
+            _, _, self.height, self.width = self.image_input.shape
 
         else:
             self.height, self.width = height, width
@@ -479,11 +482,7 @@ class BYOPFlow(BaseFlow):
                 pipe_kwargs.update({"image": images})
 
             elif self.image_input is not None:
-                if isinstance(self.image_input, Image):
-                    image_batch = [self.image_input] * len(prompts)
-                else:
-                    image_batch = self.image_input
-                pipe_kwargs.update({"image": image_batch})
+                pipe_kwargs.update({"image": self.image_input})
 
         if "generator" in self.pipe_signature:
             pipe_kwargs.update({"generator": self.generator})
@@ -500,6 +499,7 @@ class BYOPFlow(BaseFlow):
 
     @torch.no_grad()
     def apply_animation(self, image, idx):
+        image = image.convert("RGB")
         image_input = self.animation_callback(image, idx)
 
         if not self.apply_color_matching:
