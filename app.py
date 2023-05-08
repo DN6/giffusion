@@ -304,7 +304,7 @@ with demo:
                 translate_y = gr.Textbox("", label="Translate_Y")
                 angle = gr.Textbox("", label="Angle")
                 coherence_scale = gr.Slider(
-                    0, 10000, step=50, value=300, label="Coherence Scale"
+                    0, 10000, step=50, value=0, label="Coherence Scale"
                 )
                 coherence_alpha = gr.Slider(
                     0, 1.0, step=0.1, value=0.1, label="Coherence Alpha"
