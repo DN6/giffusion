@@ -7,12 +7,7 @@ from torchvision.transforms import ToPILImage, ToTensor
 
 def apply_canny(image):
     _, transformed = canny(image)
-
-    return transformed
-
-
-def apply_inpainting_mask(image):
-    output = torch.where(image < 0.0, -1.0, image)
+    output = torch.cat([transformed] * 3, dim=1)
 
     return output
 
@@ -27,4 +22,4 @@ def apply_preprocessing(image, preprocessor):
     return output
 
 
-preprocessors = {"canny": apply_canny, "inpainting": apply_inpainting_mask}
+preprocessors = {"canny": apply_canny}

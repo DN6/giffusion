@@ -36,8 +36,7 @@ class AnimationCallback:
         self.preprocess = preprocess
 
     def __call__(self, image, frame_idx):
-        image_tensor = ToTensor()(image)
-        image_tensor = image_tensor.unsqueeze(0)
+        image_tensor = ToTensor()(image).unsqueeze(0)
 
         animations = {
             "zoom": self.zoom[frame_idx],
@@ -139,6 +138,9 @@ class BYOPFlow(BaseFlow):
         self.fps = fps
 
         self.preprocess = preprocess
+        if self.pipe.__class__.__name__ != "StableDiffusionControlNetPipeline":
+            self.preprocess = "None"
+
         self.check_inputs(image_input, video_input)
 
         if image_input is not None:
@@ -508,11 +510,14 @@ class BYOPFlow(BaseFlow):
 
         # Color match the transformed image to the reference
         reference_image = self.get_reference_image(image_input)
+
         image_input = match_histograms(
-            np.array(image_input[0]) * 255, np.array(reference_image), channel_axis=-1
+            np.array(ToPILImage()(image_input[0])),
+            np.array(reference_image),
+            channel_axis=-1,
         )
-        image_input = ToTensor()(image_input)
-        image_input = image_input.unsqueeze(0)
+
+        image_input = ToTensor()(image_input).unsqueeze(0)
 
         self.image_input = image_input
 
