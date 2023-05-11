@@ -137,6 +137,7 @@ def predict(
     video_use_pil_format,
     output_format,
     model_name,
+    controlnet_name,
     additional_pipeline_arguments,
     interpolation_type,
     interpolation_args,
@@ -146,6 +147,7 @@ def predict(
     angle,
     coherence_scale,
     coherence_alpha,
+    coherence_steps,
     apply_color_matching,
     preprocessing_type,
 ):
@@ -175,6 +177,7 @@ def predict(
         video_use_pil_format=video_use_pil_format,
         output_format=output_format,
         model_name=model_name,
+        controlnet_name=controlnet_name,
         additional_pipeline_arguments=additional_pipeline_arguments,
         interpolation_type=interpolation_type,
         interpolation_args=interpolation_args,
@@ -184,6 +187,7 @@ def predict(
         angle=angle,
         coherence_scale=coherence_scale,
         coherence_alpha=coherence_alpha,
+        coherence_steps=coherence_steps,
         apply_color_matching=apply_color_matching,
         preprocess=preprocessing_type,
     )
@@ -213,7 +217,9 @@ with demo:
                         with gr.Row():
                             load_message = gr.Markdown()
 
-            with gr.Accordion("Output Settings: Set output file format and FPS"):
+            with gr.Accordion(
+                "Output Settings: Set output file format and FPS", open=False
+            ):
                 with gr.Row():
                     with gr.Column():
                         with gr.Row():
@@ -308,6 +314,9 @@ with demo:
                 )
                 coherence_alpha = gr.Slider(
                     0, 1.0, step=0.1, value=0.1, label="Coherence Alpha"
+                )
+                coherence_steps = gr.Slider(
+                    1, 10, step=1, value=1, label="Coherence Alpha"
                 )
                 apply_color_matching = gr.Checkbox(
                     label="Use Color Matching", value=False, interactive=True
@@ -442,6 +451,7 @@ with demo:
             video_use_pil_format,
             output_format,
             model_name,
+            controlnet,
             additional_pipeline_arguments,
             interpolation_type,
             interpolation_args,
@@ -451,6 +461,7 @@ with demo:
             angle,
             coherence_scale,
             coherence_alpha,
+            coherence_steps,
             apply_color_matching,
             preprocessing_type,
         ],

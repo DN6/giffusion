@@ -76,6 +76,7 @@ def run(
     video_use_pil_format=False,
     output_format="mp4",
     model_name="runwayml/stable-diffusion-v1-5",
+    controlnet_name=None,
     additional_pipeline_arguments="{}",
     interpolation_type="linear",
     interpolation_args="",
@@ -85,6 +86,7 @@ def run(
     angle="",
     coherence_scale=300,
     coherence_alpha=1.0,
+    coherence_steps=3,
     apply_color_matching=False,
     preprocess=None,
 ):
@@ -120,6 +122,7 @@ def run(
         "output_format": output_format,
         "pipeline_name": pipe.__class__.__name__,
         "model_name": model_name,
+        "controlnet_name": controlnet_name,
         "scheduler_kwargs": scheduler_kwargs,
         "additional_pipeline_arguments": additional_pipeline_arguments,
         "interpolation_type": interpolation_type,
@@ -128,6 +131,11 @@ def run(
         "translate_x": translate_x,
         "translate_y": translate_y,
         "angle": angle,
+        "coherence_scale": coherence_scale,
+        "coherence_alpha": coherence_alpha,
+        "coherence_steps": coherence_steps,
+        "apply_color_matching": False,
+        "preprocess": preprocess,
     }
     save_parameters(run_path, parameters)
 
@@ -192,18 +200,16 @@ def run(
     output_frames = []
 
     image_generator = flow.create()
-    frame_idx = 0
 
-    for output in tqdm(image_generator, total=max_frames // flow.batch_size):
+    for output, frame_ids in tqdm(image_generator, total=max_frames // flow.batch_size):
         images = output.images
-        for image in images:
+        for image, frame_idx in zip(images, frame_ids):
             img_save_path = f"{run_image_save_path}/{frame_idx:04d}.png"
             image.save(img_save_path)
             output_frames.append(img_save_path)
 
             if experiment:
                 experiment.log_image(img_save_path, image_name="frame", step=frame_idx)
-            frame_idx += 1
 
     if output_format == "gif":
         output_filename = f"{run_path}/output.gif"

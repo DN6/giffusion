@@ -35,7 +35,8 @@ class AnimationCallback:
         self.angle = animation_args.get("angle", curve_from_cn_string("0:(0.0)"))
         self.preprocess = preprocess
 
-    def __call__(self, image, frame_idx):
+    def __call__(self, image, batch):
+        frame_idx = batch["frame_ids"][0]
         image_tensor = ToTensor()(image).unsqueeze(0)
 
         animations = {
@@ -57,18 +58,22 @@ class AnimationCallback:
 
 
 class CoherenceCallback:
-    def __init__(self, init_latent=None, coherence_scale=1.5, coherence_alpha=0.0):
+    def __init__(
+        self, init_latent=None, coherence_scale=300, coherence_alpha=0.0, steps=5
+    ):
         self.init_latent = init_latent
         self.coherence_scale = coherence_scale
         self.coherence_alpha = coherence_alpha
+        self.steps = steps
 
     def apply_coherence_guidance(self, latents):
-        loss = (latents - self.init_latent).pow(2).mean()
-        cond_grad = torch.autograd.grad(loss, latents)[0]
+        for step in range(self.steps):
+            loss = (latents - self.init_latent).pow(2).mean()
+            cond_grad = torch.autograd.grad(loss, latents)[0]
 
-        latents = latents.detach() - (self.coherence_scale * cond_grad)
+            latents = latents - (self.coherence_scale * cond_grad)
 
-        return latents
+        return latents.detach()
 
     def __call__(self, latents):
         latents.requires_grad = True
@@ -445,6 +450,7 @@ class BYOPFlow(BaseFlow):
                 "prompts": prompts,
                 "init_latents": latents,
                 "images": images,
+                "frame_ids": frame_batch,
             }
 
     def prepare_inputs(self, batch):
@@ -528,6 +534,26 @@ class BYOPFlow(BaseFlow):
         latents = self.coherence_callback(latents)
         return latents
 
+    def run_inference(self, pipe_kwargs):
+        with torch.autocast("cuda"):
+            if self.use_coherence:
+                output = self.pipe(**pipe_kwargs, output_type="latent")
+                if isinstance(output, np.ndarray):
+                    latents = ToTensor()(output)
+                else:
+                    latents = output.images
+
+                latents = self.apply_coherence(latents)
+                with torch.no_grad():
+                    image = self.pipe.decode_latents(latents)
+                    image = self.postprocess(image, output_type="pil")
+
+                return ImagePipelineOutput(images=image)
+
+            else:
+                output = self.pipe(**pipe_kwargs)
+                return output
+
     def create(self, frames=None):
         batchgen = self.batch_generator(
             frames if frames else [i for i in range(self.max_frames)], self.batch_size
@@ -535,22 +561,9 @@ class BYOPFlow(BaseFlow):
 
         for batch_idx, batch in enumerate(batchgen):
             pipe_kwargs = self.prepare_inputs(batch)
-            with torch.autocast("cuda"):
-                if self.use_coherence:
-                    output = self.pipe(**pipe_kwargs, output_type="latent")
-                    latents = output.images
-                    latents = self.apply_coherence(latents)
+            output = self.run_inference(pipe_kwargs)
+            yield output, batch["frame_ids"]
 
-                    with torch.no_grad():
-                        image = self.pipe.decode_latents(latents)
-
-                    image = self.postprocess(image, output_type="pil")
-                    yield ImagePipelineOutput(images=image)
-
-                else:
-                    output = self.pipe(**pipe_kwargs)
-                    yield output
-                    image = output.images
-
-                if self.animate:
-                    self.apply_animation(image[0], batch_idx)
+            image = output.images
+            if self.animate:
+                self.apply_animation(image[0], batch)
