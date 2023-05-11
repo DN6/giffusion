@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import torch
 from diffusers import ImagePipelineOutput
-from PIL import Image
 from skimage.exposure import match_histograms
 from torchvision.transforms import ToPILImage, ToTensor
 

@@ -14,9 +14,12 @@ def apply_canny(image_tensor):
 
 
 def apply_depth_estimation(image):
-    image = ToPILImage()(image)
+    image = ToPILImage()(image[0])
     depth_map = depth_estimator(image)["depth"]
+    depth_map = ToTensor()(depth_map).unsqueeze(0)
+
     output = torch.cat([depth_map] * 3, dim=1)
+    output = output
 
     return output
 
