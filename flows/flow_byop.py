@@ -117,6 +117,7 @@ class BYOPFlow(BaseFlow):
         animation_args=None,
         coherence_scale=350,
         coherence_alpha=1.0,
+        coherence_steps=1,
         apply_color_matching=True,
         preprocess="None",
     ):
@@ -217,7 +218,9 @@ class BYOPFlow(BaseFlow):
                 animation_args, preprocess=self.preprocess
             )
             self.coherence_callback = CoherenceCallback(
-                coherence_scale=coherence_scale, coherence_alpha=coherence_alpha
+                coherence_scale=coherence_scale,
+                coherence_alpha=coherence_alpha,
+                steps=coherence_steps,
             )
             self.animate = True
         else:

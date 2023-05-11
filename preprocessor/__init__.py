@@ -1,13 +1,22 @@
-import numpy as np
 import torch
 from kornia.filters import canny
-from PIL import Image
 from torchvision.transforms import ToPILImage, ToTensor
+from transformers import pipeline
+
+depth_estimator = pipeline("depth-estimation")
 
 
-def apply_canny(image):
-    _, transformed = canny(image)
+def apply_canny(image_tensor):
+    _, transformed = canny(image_tensor)
     output = torch.cat([transformed] * 3, dim=1)
+
+    return output
+
+
+def apply_depth_estimation(image):
+    image = ToPILImage()(image)
+    depth_map = depth_estimator(image)["depth"]
+    output = torch.cat([depth_map] * 3, dim=1)
 
     return output
 
@@ -22,4 +31,4 @@ def apply_preprocessing(image, preprocessor):
     return output
 
 
-preprocessors = {"canny": apply_canny}
+preprocessors = {"canny": apply_canny, "depth": apply_depth_estimation}

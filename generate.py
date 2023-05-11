@@ -192,6 +192,7 @@ def run(
         animation_args=animation_args,
         coherence_scale=coherence_scale,
         coherence_alpha=coherence_alpha,
+        coherence_steps=coherence_steps,
         apply_color_matching=apply_color_matching,
         preprocess=preprocess,
     )
