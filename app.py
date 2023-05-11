@@ -7,9 +7,12 @@ import torch
 from PIL import Image
 
 from generate import run
-from utils import (get_audio_key_frame_information,
-                   get_video_frame_information, load_video_frames,
-                   to_pil_image)
+from utils import (
+    get_audio_key_frame_information,
+    get_video_frame_information,
+    load_video_frames,
+    to_pil_image,
+)
 
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
@@ -229,63 +232,65 @@ with demo:
                             )
 
             with gr.Accordion("Diffusion Settings", open=False):
-                use_fixed_latent = gr.Checkbox(label="Use Fixed Init Latent")
-                use_prompt_embeds = gr.Checkbox(
-                    label="Use Prompt Embeds", value=True, interactive=True
-                )
-                seed = gr.Number(value=42, label="Numerical Seed")
-                batch_size = gr.Slider(1, 64, step=1, value=1, label="Batch Size")
-                num_iteration_steps = gr.Slider(
-                    10,
-                    1000,
-                    step=10,
-                    value=20,
-                    label="Number of Iteration Steps",
-                )
-                guidance_scale = gr.Slider(
-                    0.5,
-                    20,
-                    step=0.5,
-                    value=7.5,
-                    label="Classifier Free Guidance Scale",
-                )
-                strength = gr.Slider(
-                    0, 1.0, step=0.1, value=0.5, label="Image Strength"
-                )
-                use_default_scheduler = gr.Checkbox(
-                    label="Use Default Pipeline Scheduler"
-                )
-                scheduler = gr.Dropdown(
-                    [
-                        "klms",
-                        "ddim",
-                        "ddpm",
-                        "pndms",
-                        "dpm",
-                        "dpm_ads",
-                        "deis",
-                        "euler",
-                        "euler_ads",
-                        "repaint",
-                        "unipc",
-                    ],
-                    value="deis",
-                    label="Scheduler",
-                )
-                scheduler_kwargs = gr.Textbox(
-                    label="Scheduler Arguments",
-                    value="{}",
-                )
+                with gr.Tab("Diffusion"):
+                    use_fixed_latent = gr.Checkbox(label="Use Fixed Init Latent")
+                    use_prompt_embeds = gr.Checkbox(
+                        label="Use Prompt Embeds", value=True, interactive=True
+                    )
+                    seed = gr.Number(value=42, label="Numerical Seed")
+                    batch_size = gr.Slider(1, 64, step=1, value=1, label="Batch Size")
+                    num_iteration_steps = gr.Slider(
+                        10,
+                        1000,
+                        step=10,
+                        value=20,
+                        label="Number of Iteration Steps",
+                    )
+                    guidance_scale = gr.Slider(
+                        0.5,
+                        20,
+                        step=0.5,
+                        value=7.5,
+                        label="Classifier Free Guidance Scale",
+                    )
+                    strength = gr.Slider(
+                        0, 1.0, step=0.1, value=0.5, label="Image Strength"
+                    )
+                    num_latent_channels = gr.Number(
+                        value=4, label="Number of Latent Channels"
+                    )
+                    image_height = gr.Number(value=512, label="Image Height")
+                    image_width = gr.Number(value=512, label="Image Width")
 
-                image_height = gr.Number(value=512, label="Image Height")
-                image_width = gr.Number(value=512, label="Image Width")
-                num_latent_channels = gr.Number(
-                    value=4, label="Number of Latent Channels"
-                )
+                with gr.Tab("Scheduler"):
+                    use_default_scheduler = gr.Checkbox(
+                        label="Use Default Pipeline Scheduler"
+                    )
+                    scheduler = gr.Dropdown(
+                        [
+                            "klms",
+                            "ddim",
+                            "ddpm",
+                            "pndms",
+                            "dpm",
+                            "dpm_ads",
+                            "deis",
+                            "euler",
+                            "euler_ads",
+                            "repaint",
+                            "unipc",
+                        ],
+                        value="deis",
+                        label="Scheduler",
+                    )
+                    scheduler_kwargs = gr.Textbox(
+                        label="Scheduler Arguments",
+                        value="{}",
+                    )
 
-                with gr.Accordion("Additional Pipeline Arguments", open=False):
+                with gr.Tab("Pipeline"):
                     additional_pipeline_arguments = gr.Textbox(
-                        label="",
+                        label="Additional Pipeline Arguments",
                         value="{}",
                         interactive=True,
                         lines=4,
@@ -293,32 +298,33 @@ with demo:
                     )
 
             with gr.Accordion("Animation Settings", open=False):
-                interpolation_type = gr.Dropdown(
-                    ["linear", "sine", "curve"],
-                    value="linear",
-                    label="Interpolation Type",
-                )
-                interpolation_args = gr.Textbox(
-                    "", label="Interpolation Parameters", visible=True
-                )
-
-                zoom = gr.Textbox("", label="Zoom")
-                translate_x = gr.Textbox("", label="Translate_X")
-                translate_y = gr.Textbox("", label="Translate_Y")
-                angle = gr.Textbox("", label="Angle")
-                coherence_scale = gr.Slider(
-                    0, 10000, step=50, value=0, label="Coherence Scale"
-                )
-                coherence_alpha = gr.Slider(
-                    0, 1.0, step=0.1, value=0.1, label="Coherence Alpha"
-                )
-                coherence_steps = gr.Slider(
-                    1, 10, step=1, value=1, label="Coherence Steps"
-                )
-                apply_color_matching = gr.Checkbox(
-                    label="Use Color Matching", value=False, interactive=True
-                )
-
+                with gr.Tab("Interpolation"):
+                    interpolation_type = gr.Dropdown(
+                        ["linear", "sine", "curve"],
+                        value="linear",
+                        label="Interpolation Type",
+                    )
+                    interpolation_args = gr.Textbox(
+                        "", label="Interpolation Parameters", visible=True
+                    )
+                with gr.Tab("Motion"):
+                    zoom = gr.Textbox("", label="Zoom")
+                    translate_x = gr.Textbox("", label="Translate_X")
+                    translate_y = gr.Textbox("", label="Translate_Y")
+                    angle = gr.Textbox("", label="Angle")
+                with gr.Tab("Coherence"):
+                    coherence_scale = gr.Slider(
+                        0, 10000, step=50, value=0, label="Coherence Scale"
+                    )
+                    coherence_alpha = gr.Slider(
+                        0, 1.0, step=0.1, value=0.1, label="Coherence Alpha"
+                    )
+                    coherence_steps = gr.Slider(
+                        0, 100, step=1, value=1, label="Coherence Steps"
+                    )
+                    apply_color_matching = gr.Checkbox(
+                        label="Use Color Matching", value=False, interactive=True
+                    )
             with gr.Accordion("Inspiration Settings", open=False):
                 with gr.Row():
                     topics = gr.Textbox(lines=1, value="", label="Inspiration Topics")
