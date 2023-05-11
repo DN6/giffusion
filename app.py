@@ -7,12 +7,9 @@ import torch
 from PIL import Image
 
 from generate import run
-from utils import (
-    get_audio_key_frame_information,
-    get_video_frame_information,
-    load_video_frames,
-    to_pil_image,
-)
+from utils import (get_audio_key_frame_information,
+                   get_video_frame_information, load_video_frames,
+                   to_pil_image)
 
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
@@ -316,7 +313,7 @@ with demo:
                     0, 1.0, step=0.1, value=0.1, label="Coherence Alpha"
                 )
                 coherence_steps = gr.Slider(
-                    1, 10, step=1, value=1, label="Coherence Alpha"
+                    1, 10, step=1, value=1, label="Coherence Steps"
                 )
                 apply_color_matching = gr.Checkbox(
                     label="Use Color Matching", value=False, interactive=True
