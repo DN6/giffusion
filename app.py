@@ -185,6 +185,7 @@ def predict(
         translate_x=translate_x,
         translate_y=translate_y,
         angle=angle,
+        padding_mode=padding_mode,
         coherence_scale=coherence_scale,
         coherence_alpha=coherence_alpha,
         coherence_steps=int(coherence_steps),
@@ -312,6 +313,12 @@ with demo:
                     translate_x = gr.Textbox("", label="Translate_X")
                     translate_y = gr.Textbox("", label="Translate_Y")
                     angle = gr.Textbox("", label="Angle")
+                    padding_mode = gr.Dropdown(
+                        ["zero", "border", "reflection"],
+                        label="Padding Mode",
+                        value="border",
+                    )
+
                 with gr.Tab("Coherence"):
                     coherence_scale = gr.Slider(
                         0, 10000, step=50, value=0, label="Coherence Scale"
@@ -321,6 +328,9 @@ with demo:
                     )
                     coherence_steps = gr.Slider(
                         0, 100, step=1, value=1, label="Coherence Steps"
+                    )
+                    noise_schedule = gr.Textbox(
+                        label="Noise Schedule", value="0:(0.01)"
                     )
                     apply_color_matching = gr.Checkbox(
                         label="Use Color Matching", value=False, interactive=True
@@ -464,6 +474,7 @@ with demo:
             translate_x,
             translate_y,
             angle,
+            padding_mode,
             coherence_scale,
             coherence_alpha,
             coherence_steps,

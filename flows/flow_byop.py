@@ -23,7 +23,7 @@ from .flow_base import BaseFlow
 
 
 class AnimationCallback:
-    def __init__(self, animation_args, preprocess=None):
+    def __init__(self, animation_args, padding_mode="border", preprocess=None):
         self.zoom = animation_args.get("zoom", curve_from_cn_string("0:(1.0)"))
         self.translate_x = animation_args.get(
             "translate_x", curve_from_cn_string("0:(0.0)")
@@ -33,6 +33,10 @@ class AnimationCallback:
         )
         self.angle = animation_args.get("angle", curve_from_cn_string("0:(0.0)"))
         self.preprocess = preprocess
+        self.padding_mode = "fill" if self.preprocess == "inpainting" else padding_mode
+        self.fill_value = (
+            -1.0 * torch.ones(3) if self.preprocess == "inpainting" else torch.zeros(3)
+        )
 
     def __call__(self, image, batch):
         frame_idx = batch["frame_ids"][0]
@@ -48,8 +52,8 @@ class AnimationCallback:
         transformed = apply_transformation2D(
             image_tensor,
             animations,
-            padding_mode="fill" if self.preprocess == "inpainting" else "border",
-            fill_value=-1.0 * torch.ones(3),
+            padding_mode=self.padding_mode,
+            fill_value=self.fill_value,
         )
         output_image_tensor = apply_preprocessing(transformed, self.preprocess)
 
@@ -114,9 +118,11 @@ class BYOPFlow(BaseFlow):
         interpolation_type="linear",
         interpolation_args="",
         animation_args=None,
+        padding_mode="border",
         coherence_scale=350,
         coherence_alpha=1.0,
         coherence_steps=1,
+        noise_schedule="0:(0)",
         apply_color_matching=True,
         preprocess="None",
     ):
@@ -214,7 +220,7 @@ class BYOPFlow(BaseFlow):
                 )
 
             self.animation_callback = AnimationCallback(
-                animation_args, preprocess=self.preprocess
+                animation_args, preprocess=self.preprocess, padding_mode=padding_mode
             )
             self.coherence_callback = CoherenceCallback(
                 coherence_scale=coherence_scale,
@@ -225,6 +231,7 @@ class BYOPFlow(BaseFlow):
         else:
             self.animate = False
         self.use_coherence = self.animate and coherence_scale > 0.0
+        self.noise_schedule = curve_from_cn_string(noise_schedule)
         self.apply_color_matching = apply_color_matching
 
     def check_inputs(self, image_input, video_input):
@@ -507,6 +514,9 @@ class BYOPFlow(BaseFlow):
 
         return self.reference_image
 
+    def apply_color_matching(self, image_tensor, reference_image_tensor):
+        return
+
     @torch.no_grad()
     def apply_animation(self, image, idx):
         image = image.convert("RGB")
@@ -529,11 +539,15 @@ class BYOPFlow(BaseFlow):
 
         self.image_input = image_input
 
-    def apply_coherence(self, latents):
+    def apply_coherence(self, latents, batch):
+        frame_id = batch["frame_ids"][0]
+
         if self.coherence_callback.init_latent is None:
             self.coherence_callback.init_latent = latents
 
         latents = self.coherence_callback(latents)
+        noise = self.noise_schedule[frame_id] * torch.randn(latents.shape)
+        latents = latents + noise
         return latents
 
     def run_inference(self, pipe_kwargs):
