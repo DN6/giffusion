@@ -15,7 +15,12 @@ from utils import (
 )
 
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
-OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
+OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "generated")
+MODEL_PATH = os.getenv("MODEL_PATH", "models")
+
+os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
+os.makedirs(MODEL_PATH, exist_ok=True)
+
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
 
@@ -32,7 +37,7 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
             from diffusers import ControlNetModel
 
             controlnet_model = ControlNetModel.from_pretrained(
-                controlnet, torch_dtype=torch.float16, cache_dir=OUTPUT_BASE_PATH
+                controlnet, torch_dtype=torch.float16, cache_dir=MODEL_PATH
             )
             pipeline_name = "StableDiffusionControlNetPipeline"
 
@@ -145,6 +150,7 @@ def predict(
     translate_x,
     translate_y,
     angle,
+    padding_mode,
     coherence_scale,
     coherence_alpha,
     coherence_steps,
