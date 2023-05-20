@@ -1,5 +1,6 @@
-import re
 import json
+import re
+
 import librosa
 import numpy as np
 import torch
@@ -207,3 +208,10 @@ def save_video(frames, filename="./output.mp4", fps=24, quality=95, audio_input=
 def save_parameters(save_path, parameters):
     with open(f"{save_path}/parameters.json", "w") as f:
         json.dump(parameters, f)
+
+
+def set_xformers():
+    if int(torch.__version__.split(".")[0]) == 2:
+        return True
+
+    return False

@@ -11,17 +11,15 @@ from utils import (
     get_audio_key_frame_information,
     get_video_frame_information,
     load_video_frames,
+    set_xformers,
     to_pil_image,
 )
 
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
-prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
+USE_XFORMERS = set_xformers()
 
-if int(torch.__version__.split(".")[0]) == 2:
-    USE_XFORMERS = True
-else:
-    USE_XFORMERS = False
+prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
 
 def load_pipeline(model_name, pipeline_name, controlnet, pipe):
