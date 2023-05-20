@@ -18,6 +18,11 @@ DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
+if int(torch.__version__.split(".")[0]) == 2:
+    USE_XFORMERS = True
+else:
+    USE_XFORMERS = False
+
 
 def load_pipeline(model_name, pipeline_name, controlnet, pipe):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -60,6 +65,9 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
             pipe.enable_model_cpu_offload()
         else:
             pipe.to(device)
+
+        if USE_XFORMERS:
+            pipe.enable_xformers_memory_efficient_attention()
 
         return pipe, f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
 
