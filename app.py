@@ -11,6 +11,7 @@ from utils import (
     get_audio_key_frame_information,
     get_video_frame_information,
     load_video_frames,
+    set_xformers,
     to_pil_image,
 )
 
@@ -20,6 +21,8 @@ MODEL_PATH = os.getenv("MODEL_PATH", "models")
 
 os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
 os.makedirs(MODEL_PATH, exist_ok=True)
+
+USE_XFORMERS = set_xformers()
 
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
@@ -69,7 +72,8 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
         if hasattr(pipe, "enable_vae_tiling"):
             pipe.enable_vae_tiling()
 
-        pipe.enable_xformers_memory_efficient_attention()
+        if USE_XFORMERS:
+            pipe.enable_xformers_memory_efficient_attention()
 
         return pipe, f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
 

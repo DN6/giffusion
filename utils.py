@@ -217,3 +217,18 @@ def save_video(frames, filename="./output.mp4", fps=24, quality=95, audio_input=
 def save_parameters(save_path, parameters):
     with open(f"{save_path}/parameters.json", "w") as f:
         json.dump(parameters, f)
+
+
+def set_xformers():
+    torch_is_version_2 = int(torch.__version__.split(".")[0]) == 2
+    try:
+        import xformers
+
+        xformers_available = True
+    except (ImportError, ModuleNotFoundError):
+        xformers_available = False
+
+    if (not torch_is_version_2) and xformers_available:
+        return True
+
+    return False
