@@ -11,11 +11,14 @@ from utils import (
     get_audio_key_frame_information,
     get_video_frame_information,
     load_video_frames,
+    set_xformers,
     to_pil_image,
 )
 
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
+USE_XFORMERS = set_xformers()
+
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
 
@@ -61,7 +64,8 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
         else:
             pipe.to(device)
 
-        pipe.enable_xformers_memory_efficient_attention()
+        if USE_XFORMERS:
+            pipe.enable_xformers_memory_efficient_attention()
 
         return pipe, f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
 
