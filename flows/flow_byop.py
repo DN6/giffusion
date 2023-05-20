@@ -4,6 +4,7 @@ import random
 import librosa
 import numpy as np
 import pandas as pd
+import PIL
 import torch
 from diffusers import ImagePipelineOutput
 from skimage.exposure import match_histograms
@@ -155,6 +156,7 @@ class BYOPFlow(BaseFlow):
         self.check_inputs(image_input, video_input)
 
         if image_input is not None:
+            image_input = self.resize_image_input(image_input)
             self.reference_image = image_input.convert("RGB")
             self.image_input = apply_preprocessing(
                 ToTensor()(image_input).unsqueeze(0), self.preprocess
@@ -240,6 +242,18 @@ class BYOPFlow(BaseFlow):
                 f"Cannot forward both `image_input` and `video_input`. Please make sure to"
                 " only forward one of the two."
             )
+
+    def resize_image_input(self, image_input):
+        # Resize so image size is divisible by 8
+        height, width = image_input.size
+        resized_height = height - (height % 8)
+        resized_width = width - (width % 8)
+
+        image_input = image_input.resize(
+            resized_height, resized_width, PIL.Image.LANCZOS
+        )
+
+        return image_input
 
     def prep_animation_args(self, animation_args):
         output = {}
