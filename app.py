@@ -61,8 +61,6 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
         else:
             pipe.to(device)
 
-        pipe.enable_xformers_memory_efficient_attention()
-
         return pipe, f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
 
     except Exception as e:
