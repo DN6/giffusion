@@ -211,7 +211,15 @@ def save_parameters(save_path, parameters):
 
 
 def set_xformers():
-    if int(torch.__version__.split(".")[0]) == 2:
+    torch_is_version_2 = int(torch.__version__.split(".")[0]) == 2
+    try:
+        import xformers
+
+        xformers_available = True
+    except (ImportError, ModuleNotFoundError):
+        xformers_available = False
+
+    if (not torch_is_version_2) and xformers_available:
         return True
 
     return False

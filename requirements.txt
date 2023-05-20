@@ -11,4 +11,5 @@ pandas
 keyframed
 kornia
 triton
-xformers
+torch
+torchvision
