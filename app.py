@@ -61,7 +61,7 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
                 use_auth_token=True,
                 torch_dtype=torch.float16,
                 safety_checker=None,
-                cache_dir=OUTPUT_BASE_PATH,
+                cache_dir=MODEL_PATH,
             )
 
         if hasattr(pipe, "enable_model_cpu_offload"):
@@ -159,6 +159,12 @@ def predict(
     coherence_alpha,
     coherence_steps,
     apply_color_matching,
+    brightness_curve,
+    contrast_curve,
+    sharpness_curve,
+    hue_curve,
+    saturation_curve,
+    gamma_curve,
     preprocessing_type,
 ):
     output = run(
@@ -200,6 +206,12 @@ def predict(
         coherence_alpha=coherence_alpha,
         coherence_steps=int(coherence_steps),
         apply_color_matching=apply_color_matching,
+        brightness_curve=brightness_curve,
+        contrast_curve=contrast_curve,
+        sharpness_curve=sharpness_curve,
+        hue_curve=hue_curve,
+        saturation_curve=saturation_curve,
+        gamma_curve=gamma_curve,
         preprocess=preprocessing_type,
     )
 
@@ -342,9 +354,17 @@ with demo:
                     noise_schedule = gr.Textbox(
                         label="Noise Schedule", value="0:(0.01)"
                     )
+                with gr.Tab("Image Color"):
                     apply_color_matching = gr.Checkbox(
                         label="Use Color Matching", value=False, interactive=True
                     )
+                    brightness_curve = gr.Textbox(label="Brightness Curve")
+                    contrast_curve = gr.Textbox(label="Contrast Curve")
+                    sharpness_curve = gr.Textbox(label="Sharpness Curve")
+                    hue_curve = gr.Textbox(label="Hue Curve")
+                    saturation_curve = gr.Textbox(label="Saturation Curve")
+                    gamma_curve = gr.Textbox(label="Gamma Curve")
+
             with gr.Accordion("Inspiration Settings", open=False):
                 with gr.Row():
                     topics = gr.Textbox(lines=1, value="", label="Inspiration Topics")
@@ -489,6 +509,12 @@ with demo:
             coherence_alpha,
             coherence_steps,
             apply_color_matching,
+            brightness_curve,
+            contrast_curve,
+            sharpness_curve,
+            hue_curve,
+            saturation_curve,
+            gamma_curve,
             preprocessing_type,
         ],
         outputs=output,

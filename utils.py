@@ -5,7 +5,7 @@ import librosa
 import numpy as np
 import torch
 from keyframed.dsl import curve_from_cn_string
-from kornia.geometry.transform import Affine, get_affine_matrix2d, warp_affine
+from kornia.geometry.transform import get_affine_matrix2d, warp_affine
 from PIL import Image
 from torchvision.io import read_video, write_video
 from torchvision.transforms.functional import pil_to_tensor, to_pil_image

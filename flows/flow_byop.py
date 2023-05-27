@@ -1,12 +1,21 @@
 import inspect
 import random
+from typing import Any
 
 import librosa
 import numpy as np
 import pandas as pd
-import PIL
 import torch
 from diffusers import ImagePipelineOutput
+from kornia.enhance import (
+    adjust_brightness,
+    adjust_contrast,
+    adjust_gamma,
+    adjust_hue,
+    adjust_saturation,
+    adjust_sharpness,
+)
+from PIL import Image
 from skimage.exposure import match_histograms
 from torchvision.transforms import ToPILImage, ToTensor
 
@@ -23,7 +32,7 @@ from utils import (
 from .flow_base import BaseFlow
 
 
-class AnimationCallback:
+class MotionCallback:
     def __init__(self, animation_args, padding_mode="border", preprocess=None):
         self.zoom = animation_args.get("zoom", curve_from_cn_string("0:(1.0)"))
         self.translate_x = animation_args.get(
@@ -59,6 +68,32 @@ class AnimationCallback:
         output_image_tensor = apply_preprocessing(transformed, self.preprocess)
 
         return output_image_tensor
+
+
+class ImageColorCallback:
+    def __init__(self, animation_args) -> None:
+        self.hue = animation_args.get("hue", curve_from_cn_string("0:(1.0)"))
+        self.brightness = animation_args.get(
+            "brightness", curve_from_cn_string("0:(1.0)")
+        )
+        self.sharpness = animation_args.get(
+            "sharpness", curve_from_cn_string("0:(1.0)")
+        )
+        self.contrast = animation_args.get("contrast", curve_from_cn_string("0:(1.0)"))
+        self.gamma = animation_args.get("gamma", curve_from_cn_string("0:(1.0)"))
+        self.saturation = animation_args.get(
+            "saturation", curve_from_cn_string("0:(1.0)")
+        )
+
+    def __call__(self, image, frame_idx):
+        image = adjust_hue(image, self.hue[frame_idx])
+        image = adjust_brightness(image, self.brightness[frame_idx])
+        image = adjust_saturation(image, self.saturation[frame_idx])
+        image = adjust_sharpness(image, self.sharpness[frame_idx])
+        image = adjust_contrast(image, self.contrast[frame_idx])
+        image = adjust_gamma(image, self.gamma[frame_idx])
+
+        return image
 
 
 class CoherenceCallback:
@@ -118,13 +153,14 @@ class BYOPFlow(BaseFlow):
         additional_pipeline_arguments={},
         interpolation_type="linear",
         interpolation_args="",
-        animation_args=None,
+        motion_args=None,
         padding_mode="border",
         coherence_scale=350,
         coherence_alpha=1.0,
         coherence_steps=1,
         noise_schedule="0:(0)",
         apply_color_matching=True,
+        image_color_args=None,
         preprocess="None",
     ):
         super().__init__(pipe, device, batch_size)
@@ -172,8 +208,6 @@ class BYOPFlow(BaseFlow):
             self.video_frames, _, _ = load_video_frames(self.video_input)
             _, self.height, self.width = self.video_frames[0].size()
 
-            self.video_frames = apply_preprocessing(self.video_frames, self.preprocess)
-
         elif self.image_input is not None:
             _, _, self.height, self.width = self.image_input.shape
 
@@ -213,16 +247,17 @@ class BYOPFlow(BaseFlow):
         else:
             self.prompts = self.get_prompts(key_frames)
 
-        animation_args = self.prep_animation_args(animation_args)
-        if animation_args:
+        motion_args = self.prep_animation_args(motion_args)
+        image_color_args = self.prep_animation_args(image_color_args)
+        if motion_args:
             if self.batch_size != 1:
                 raise ValueError(
                     f"In order to use Animation Arguments",
                     f"batch size must be set to 1 but found batch size {self.batch_size}",
                 )
 
-            self.animation_callback = AnimationCallback(
-                animation_args, preprocess=self.preprocess, padding_mode=padding_mode
+            self.motion_callback = MotionCallback(
+                motion_args, preprocess=self.preprocess, padding_mode=padding_mode
             )
             self.coherence_callback = CoherenceCallback(
                 coherence_scale=coherence_scale,
@@ -232,6 +267,12 @@ class BYOPFlow(BaseFlow):
             self.animate = True
         else:
             self.animate = False
+
+        if image_color_args:
+            self.image_color_callback = ImageColorCallback(image_color_args)
+        else:
+            self.image_color_callback = None
+
         self.use_coherence = self.animate and coherence_scale > 0.0
         self.noise_schedule = curve_from_cn_string(noise_schedule)
         self.apply_color_matching = apply_color_matching
@@ -249,9 +290,7 @@ class BYOPFlow(BaseFlow):
         resized_height = height - (height % 8)
         resized_width = width - (width % 8)
 
-        image_input = image_input.resize(
-            resized_height, resized_width, PIL.Image.LANCZOS
-        )
+        image_input = image_input.resize((resized_height, resized_width), Image.LANCZOS)
 
         return image_input
 
@@ -466,6 +505,7 @@ class BYOPFlow(BaseFlow):
                     images = list(map(lambda x: ToPILImage()(x[0]), images))
                 else:
                     images = torch.cat(images, dim=0)
+                    images = apply_preprocessing(images, self.preprocess)
             else:
                 images = []
 
@@ -528,18 +568,7 @@ class BYOPFlow(BaseFlow):
 
         return self.reference_image
 
-    def apply_color_matching(self, image_tensor, reference_image_tensor):
-        return
-
-    @torch.no_grad()
-    def apply_animation(self, image, idx):
-        image = image.convert("RGB")
-        image_input = self.animation_callback(image, idx)
-
-        if not self.apply_color_matching:
-            self.image_input = image_input
-            return
-
+    def apply_color_matching(self, image_tensor):
         # Color match the transformed image to the reference
         reference_image = self.get_reference_image(image_input)
 
@@ -548,8 +577,18 @@ class BYOPFlow(BaseFlow):
             np.array(reference_image),
             channel_axis=-1,
         )
-
         image_input = ToTensor()(image_input).unsqueeze(0)
+
+        return image_input
+
+    @torch.no_grad()
+    def apply_animation(self, image, idx):
+        image = image.convert("RGB")
+        image_input = self.motion_callback(image, idx)
+
+        if not self.apply_color_matching:
+            self.image_input = image_input
+            return
 
         self.image_input = image_input
 
@@ -595,5 +634,9 @@ class BYOPFlow(BaseFlow):
             yield output, batch["frame_ids"]
 
             image = output.images
+
+            if self.image_color_callback:
+                image = [self.image_color_callback(image[0])]
+
             if self.animate:
                 self.apply_animation(image[0], batch)

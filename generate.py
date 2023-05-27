@@ -89,6 +89,12 @@ def run(
     coherence_alpha=1.0,
     coherence_steps=3,
     apply_color_matching=False,
+    brightness_curve="",
+    contrast_curve="",
+    sharpness_curve="",
+    hue_curve="",
+    saturation_curve="",
+    gamma_curve="",
     preprocess=None,
 ):
     if pipe is None:
@@ -164,6 +170,14 @@ def run(
         "translate_y": translate_y,
         "angle": angle,
     }
+    image_color_args = {
+        "brightness": brightness_curve,
+        "contrast": contrast_curve,
+        "sharpness": sharpness_curve,
+        "hue": hue_curve,
+        "saturation": saturation_curve,
+        "gamma": gamma_curve,
+    }
     additional_pipeline_arguments = json.loads(additional_pipeline_arguments)
 
     flow = BYOPFlow(
@@ -197,6 +211,7 @@ def run(
         coherence_alpha=coherence_alpha,
         coherence_steps=coherence_steps,
         apply_color_matching=apply_color_matching,
+        image_color_args=image_color_args,
         preprocess=preprocess,
     )
 
