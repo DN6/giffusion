@@ -51,7 +51,7 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
                 torch_dtype=torch.float16,
                 safety_checker=None,
                 controlnet=controlnet_model,
-                cache_dir=OUTPUT_BASE_PATH,
+                cache_dir=MODEL_PATH,
             )
 
         else:
@@ -300,7 +300,6 @@ with demo:
                             "deis",
                             "euler",
                             "euler_ads",
-                            "repaint",
                             "unipc",
                         ],
                         value="deis",
@@ -399,7 +398,7 @@ with demo:
                 )
             with gr.Row():
                 negative_prompt_input = gr.Textbox(
-                    value="""low resolution""",
+                    value="""low resolution, blurry, worst quality, jpeg artifacts""",
                     label="Negative Prompts",
                     interactive=True,
                 )

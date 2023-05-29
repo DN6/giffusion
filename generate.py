@@ -164,7 +164,7 @@ def run(
 
         pipe.scheduler = load_scheduler(scheduler, **scheduler_kwargs)
 
-    animation_args = {
+    motion_args = {
         "zoom": zoom,
         "translate_x": translate_x,
         "translate_y": translate_y,
@@ -205,7 +205,7 @@ def run(
         additional_pipeline_arguments=additional_pipeline_arguments,
         interpolation_type=interpolation_type,
         interpolation_args=interpolation_args,
-        animation_args=animation_args,
+        motion_args=motion_args,
         padding_mode=padding_mode,
         coherence_scale=coherence_scale,
         coherence_alpha=coherence_alpha,

@@ -13,7 +13,7 @@ from kornia.enhance import (
     adjust_gamma,
     adjust_hue,
     adjust_saturation,
-    adjust_sharpness,
+    sharpness,
 )
 from PIL import Image
 from skimage.exposure import match_histograms
@@ -89,7 +89,7 @@ class ImageColorCallback:
         image = adjust_hue(image, self.hue[frame_idx])
         image = adjust_brightness(image, self.brightness[frame_idx])
         image = adjust_saturation(image, self.saturation[frame_idx])
-        image = adjust_sharpness(image, self.sharpness[frame_idx])
+        image = sharpness(image, self.sharpness[frame_idx])
         image = adjust_contrast(image, self.contrast[frame_idx])
         image = adjust_gamma(image, self.gamma[frame_idx])
 
