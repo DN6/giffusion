@@ -19,7 +19,7 @@ from PIL import Image
 from skimage.exposure import match_histograms
 from torchvision.transforms import ToPILImage, ToTensor
 
-from preprocessor import apply_preprocessing
+from preprocessor import Preprocessor, apply_preprocessing
 from utils import (
     apply_transformation2D,
     curve_from_cn_string,
@@ -33,7 +33,7 @@ from .flow_base import BaseFlow
 
 
 class MotionCallback:
-    def __init__(self, animation_args, padding_mode="border", preprocess=None):
+    def __init__(self, animation_args, padding_mode="border", preprocessor=None):
         self.zoom = animation_args.get("zoom", curve_from_cn_string("0:(1.0)"))
         self.translate_x = animation_args.get(
             "translate_x", curve_from_cn_string("0:(0.0)")
@@ -42,10 +42,14 @@ class MotionCallback:
             "translate_y", curve_from_cn_string("0:(0.0)")
         )
         self.angle = animation_args.get("angle", curve_from_cn_string("0:(0.0)"))
-        self.preprocess = preprocess
-        self.padding_mode = "fill" if self.preprocess == "inpainting" else padding_mode
+        self.preprocessor = preprocessor
+        self.padding_mode = (
+            "fill" if self.preprocessor.preprocess_id == "inpainting" else padding_mode
+        )
         self.fill_value = (
-            -1.0 * torch.ones(3) if self.preprocess == "inpainting" else torch.zeros(3)
+            -1.0 * torch.ones(3)
+            if self.preprocessor.preprocess_id == "inpainting"
+            else torch.zeros(3)
         )
 
     def __call__(self, image, batch):
@@ -65,9 +69,10 @@ class MotionCallback:
             padding_mode=self.padding_mode,
             fill_value=self.fill_value,
         )
-        output_image_tensor = apply_preprocessing(transformed, self.preprocess)
+        if self.preprocessor.processor_id != "inpaint":
+            transformed = ToPILImage()(transformed[0])
 
-        return output_image_tensor
+        return transformed
 
 
 class ImageColorCallback:
@@ -188,15 +193,15 @@ class BYOPFlow(BaseFlow):
         self.preprocess = preprocess
         if self.pipe.__class__.__name__ != "StableDiffusionControlNetPipeline":
             self.preprocess = "None"
+        self.preprocessor = Preprocessor(self.preprocess)
 
         self.check_inputs(image_input, video_input)
 
         if image_input is not None:
             image_input = self.resize_image_input(image_input)
             self.reference_image = image_input.convert("RGB")
-            self.image_input = apply_preprocessing(
-                ToTensor()(image_input).unsqueeze(0), self.preprocess
-            )
+            self.image_input = self.preprocessor(image_input)
+
         else:
             self.reference_image = self.image_input = None
 
@@ -257,7 +262,7 @@ class BYOPFlow(BaseFlow):
                 )
 
             self.motion_callback = MotionCallback(
-                motion_args, preprocess=self.preprocess, padding_mode=padding_mode
+                motion_args, preprocessor=self.preprocessor, padding_mode=padding_mode
             )
             self.coherence_callback = CoherenceCallback(
                 coherence_scale=coherence_scale,
@@ -503,9 +508,10 @@ class BYOPFlow(BaseFlow):
                 )
                 if self.video_use_pil_format:
                     images = list(map(lambda x: ToPILImage()(x[0]), images))
+                    images = [self.preprocessor(image) for image in images]
                 else:
                     images = torch.cat(images, dim=0)
-                    images = apply_preprocessing(images, self.preprocess)
+
             else:
                 images = []
 

@@ -13,3 +13,4 @@ kornia
 triton
 torch
 torchvision
+controlnet-aux==0.0.5

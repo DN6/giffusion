@@ -4,6 +4,7 @@ import pathlib
 
 import gradio as gr
 import torch
+from controlnet_aux.processor import MODELS as CONTROLNET_PROCESSORS
 from PIL import Image
 
 from generate import run
@@ -23,6 +24,7 @@ os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
 os.makedirs(MODEL_PATH, exist_ok=True)
 
 USE_XFORMERS = set_xformers()
+CONTROLNET_PROCESSORS = ["None", "inpaint"] + list(CONTROLNET_PROCESSORS.keys())
 
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
@@ -424,7 +426,7 @@ with demo:
             with gr.Accordion("Video Input", open=False):
                 video_input = gr.Video(label="Video Input")
                 video_info_btn = gr.Button(value="Get Key Frame Infomation")
-                video_use_pil_format = gr.Checkbox(label="Use PIL Format", value=False)
+                video_use_pil_format = gr.Checkbox(label="Use PIL Format", value=True)
 
             with gr.Accordion("Resample Output", open=False):
                 with gr.Accordion("Send to Image Input", open=False):
@@ -435,7 +437,7 @@ with demo:
 
             with gr.Accordion("Controlnet Preprocessing Settings", open=False):
                 preprocessing_type = gr.Dropdown(
-                    ["canny", "inpainting", "depth", "None"],
+                    CONTROLNET_PROCESSORS,
                     value="None",
                     label="Preprocessing",
                 )
