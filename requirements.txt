@@ -13,4 +13,4 @@ kornia
 triton
 torch
 torchvision
-controlnet-aux @ git+https://github.com/patrickvonplaten/controlnet_aux.git
+controlnet-aux==0.0.5
