@@ -144,6 +144,3 @@ class Preprocessor:
             return image
 
         return self.processor(image)
-
-
-preprocessors = {"canny": apply_canny, "depth": apply_depth_estimation}
