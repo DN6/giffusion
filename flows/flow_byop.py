@@ -564,11 +564,14 @@ class BYOPFlow(BaseFlow):
             self.coherence_callback.init_latent = latents
 
         latents = self.coherence_callback(latents)
-        noise = self.noise_schedule[frame_id] * torch.randn(latents.shape)
+        noise = self.noise_schedule[frame_id] * torch.randn(latents.shape).to(
+            latents.device
+        )
         latents = latents + noise
         return latents
 
-    def run_inference(self, pipe_kwargs):
+    def run_inference(self, batch):
+        pipe_kwargs = self.prepare_inputs(batch)
         with torch.autocast("cuda"):
             if self.use_coherence:
                 output = self.pipe(**pipe_kwargs, output_type="latent")
@@ -577,7 +580,7 @@ class BYOPFlow(BaseFlow):
                 else:
                     latents = output.images
 
-                latents = self.apply_coherence(latents)
+                latents = self.apply_coherence(latents, batch)
                 with torch.no_grad():
                     image = self.pipe.decode_latents(latents)
                     image = self.postprocess(image, output_type="pil")
@@ -594,8 +597,7 @@ class BYOPFlow(BaseFlow):
         )
 
         for batch_idx, batch in enumerate(batchgen):
-            pipe_kwargs = self.prepare_inputs(batch)
-            output = self.run_inference(pipe_kwargs)
+            output = self.run_inference(batch)
             yield output, batch["frame_ids"]
 
             image = output.images
