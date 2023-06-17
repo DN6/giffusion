@@ -7,14 +7,6 @@ import numpy as np
 import pandas as pd
 import torch
 from diffusers import ImagePipelineOutput
-from kornia.enhance import (
-    adjust_brightness,
-    adjust_contrast,
-    adjust_gamma,
-    adjust_hue,
-    adjust_saturation,
-    sharpness,
-)
 from PIL import Image
 from skimage.exposure import match_histograms
 from torchvision.transforms import ToPILImage, ToTensor
@@ -44,11 +36,11 @@ class MotionCallback:
         self.angle = animation_args.get("angle", curve_from_cn_string("0:(0.0)"))
         self.preprocessor = preprocessor
         self.padding_mode = (
-            "fill" if self.preprocessor.preprocess_id == "inpainting" else padding_mode
+            "fill" if self.preprocessor.processor_id == "inpainting" else padding_mode
         )
         self.fill_value = (
             -1.0 * torch.ones(3)
-            if self.preprocessor.preprocess_id == "inpainting"
+            if self.preprocessor.processor_id == "inpainting"
             else torch.zeros(3)
         )
 
@@ -73,37 +65,6 @@ class MotionCallback:
             transformed = ToPILImage()(transformed[0])
 
         return transformed
-
-
-class ImageColorCallback:
-    def __init__(self, animation_args) -> None:
-        self.hue = animation_args.get("hue", curve_from_cn_string("0:(1.0)"))
-        self.brightness = animation_args.get(
-            "brightness", curve_from_cn_string("0:(1.0)")
-        )
-        self.sharpness = animation_args.get(
-            "sharpness", curve_from_cn_string("0:(1.0)")
-        )
-        self.contrast = animation_args.get("contrast", curve_from_cn_string("0:(1.0)"))
-        self.gamma = animation_args.get("gamma", curve_from_cn_string("0:(1.0)"))
-        self.saturation = animation_args.get(
-            "saturation", curve_from_cn_string("0:(1.0)")
-        )
-
-    def __call__(self, image, batch):
-        frame_idx = batch["frame_ids"][0]
-        image = ToTensor()(image)
-
-        image = adjust_hue(image, self.hue[frame_idx])
-        image = adjust_brightness(image, self.brightness[frame_idx])
-        image = adjust_saturation(image, self.saturation[frame_idx])
-        image = sharpness(image, self.sharpness[frame_idx])
-        image = adjust_contrast(image, self.contrast[frame_idx])
-        image = adjust_gamma(image, self.gamma[frame_idx])
-
-        image = ToPILImage()(image)
-
-        return image
 
 
 class CoherenceCallback:
@@ -170,7 +131,6 @@ class BYOPFlow(BaseFlow):
         coherence_steps=1,
         noise_schedule="0:(0)",
         apply_color_matching=True,
-        image_color_args=None,
         preprocess="None",
     ):
         super().__init__(pipe, device, batch_size)
@@ -258,7 +218,6 @@ class BYOPFlow(BaseFlow):
             self.prompts = self.get_prompts(key_frames)
 
         motion_args = self.prep_animation_args(motion_args)
-        image_color_args = self.prep_animation_args(image_color_args)
         if motion_args:
             if self.batch_size != 1:
                 raise ValueError(
@@ -277,11 +236,6 @@ class BYOPFlow(BaseFlow):
             self.animate = True
         else:
             self.animate = False
-
-        if image_color_args:
-            self.image_color_callback = ImageColorCallback(image_color_args)
-        else:
-            self.image_color_callback = None
 
         self.use_coherence = self.animate and coherence_scale > 0.0
         self.noise_schedule = curve_from_cn_string(noise_schedule)
@@ -645,9 +599,6 @@ class BYOPFlow(BaseFlow):
             yield output, batch["frame_ids"]
 
             image = output.images
-
-            if self.image_color_callback:
-                image = [self.image_color_callback(image[0], batch)]
 
             if self.animate:
                 self.apply_animation(image[0], batch)
