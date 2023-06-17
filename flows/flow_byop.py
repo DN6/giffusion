@@ -90,7 +90,8 @@ class ImageColorCallback:
             "saturation", curve_from_cn_string("0:(1.0)")
         )
 
-    def __call__(self, image, frame_idx):
+    def __call__(self, image, batch):
+        frame_idx = batch["frame_ids"][0]
         image = ToTensor()(image)
 
         image = adjust_hue(image, self.hue[frame_idx])
@@ -646,7 +647,11 @@ class BYOPFlow(BaseFlow):
             image = output.images
 
             if self.image_color_callback:
-                image = [self.image_color_callback(image[0])]
+                image = [
+                    self.image_color_callback(
+                        image[0],
+                    )
+                ]
 
             if self.animate:
                 self.apply_animation(image[0], batch)
