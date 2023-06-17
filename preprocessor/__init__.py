@@ -97,9 +97,9 @@ class Preprocessor:
     def __init__(self, processor_id) -> None:
         self.processor_id = processor_id
         if not MODELS.get(processor_id):
-            self.processor = Processor(processor_id)
-        else:
             self.processor = None
+        else:
+            self.processor = Processor(processor_id)
 
     def __call__(self, image) -> Any:
         if not self.processor:
