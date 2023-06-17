@@ -343,7 +343,6 @@ with demo:
                     noise_schedule = gr.Textbox(
                         label="Noise Schedule", value="0:(0.01)", interactive=True
                     )
-                with gr.Tab("Image Color"):
                     apply_color_matching = gr.Checkbox(
                         label="Use Color Matching", value=False, interactive=True
                     )
