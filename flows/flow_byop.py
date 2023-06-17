@@ -19,7 +19,7 @@ from PIL import Image
 from skimage.exposure import match_histograms
 from torchvision.transforms import ToPILImage, ToTensor
 
-from preprocessor import Preprocessor, apply_preprocessing
+from preprocessor import Preprocessor
 from utils import (
     apply_transformation2D,
     curve_from_cn_string,
@@ -91,12 +91,16 @@ class ImageColorCallback:
         )
 
     def __call__(self, image, frame_idx):
+        image = ToTensor()(image)
+
         image = adjust_hue(image, self.hue[frame_idx])
         image = adjust_brightness(image, self.brightness[frame_idx])
         image = adjust_saturation(image, self.saturation[frame_idx])
         image = sharpness(image, self.sharpness[frame_idx])
         image = adjust_contrast(image, self.contrast[frame_idx])
         image = adjust_gamma(image, self.gamma[frame_idx])
+
+        image = ToPILImage()(image)
 
         return image
 
