@@ -647,11 +647,7 @@ class BYOPFlow(BaseFlow):
             image = output.images
 
             if self.image_color_callback:
-                image = [
-                    self.image_color_callback(
-                        image[0],
-                    )
-                ]
+                image = [self.image_color_callback(image[0], batch)]
 
             if self.animate:
                 self.apply_animation(image[0], batch)
