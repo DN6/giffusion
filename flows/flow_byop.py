@@ -179,7 +179,7 @@ class BYOPFlow(BaseFlow):
             _, self.height, self.width = self.video_frames[0].size()
 
         elif self.image_input is not None:
-            _, _, self.height, self.width = self.image_input.shape
+            self.height, self.width = self.image_input.size
 
         else:
             self.height, self.width = height, width
