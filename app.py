@@ -38,6 +38,9 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
             del pipe
             torch.cuda.empty_cache()
 
+        success_message = (
+            f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
+        )
         if controlnet:
             from diffusers import ControlNetModel
 
@@ -55,6 +58,7 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
                 controlnet=controlnet_model,
                 cache_dir=MODEL_PATH,
             )
+            message = f"Successfully loaded Pipeline: {pipeline_name} with {model_name} and {controlnet}"
 
         else:
             pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
@@ -77,7 +81,7 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
         if USE_XFORMERS:
             pipe.enable_xformers_memory_efficient_attention()
 
-        return pipe, f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
+        return pipe, success_message
 
     except Exception as e:
         print(e)
