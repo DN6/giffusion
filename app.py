@@ -58,7 +58,7 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
                 controlnet=controlnet_model,
                 cache_dir=MODEL_PATH,
             )
-            message = f"Successfully loaded Pipeline: {pipeline_name} with {model_name} and {controlnet}"
+            success_message = f"Successfully loaded Pipeline: {pipeline_name} with {model_name} and {controlnet}"
 
         else:
             pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
