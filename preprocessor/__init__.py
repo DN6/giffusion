@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Any, Dict, Optional, Union
 
-from controlnet_aux.processor import MODELS
+from controlnet_aux.processor import MODEL_PARAMS, MODELS
 from PIL import Image
 
 MODEL_PATH = os.getenv("MODEL_PATH", "models")
@@ -29,7 +29,7 @@ class Processor:
         self.processor = self.load_processor(self.processor_id)
 
         # load default params
-        self.params = MODELS[self.processor_id]
+        self.params = MODEL_PARAMS[self.processor_id]
         # update with user params
         if params:
             self.params.update(params)
@@ -94,15 +94,27 @@ class Processor:
 
 
 class Preprocessor:
-    def __init__(self, processor_id) -> None:
-        self.processor_id = processor_id
+    def __init__(self, processor_ids) -> None:
+        self.processor_ids = processor_ids
+        self.processors = [
+            self.load_processor(processor_id) for processor_id in self.processor_ids
+        ]
+
+    def load_processor(self, processor_id):
         if not MODELS.get(processor_id):
-            self.processor = None
+            return None
         else:
-            self.processor = Processor(processor_id)
+            return Processor(processor_id)
 
     def __call__(self, image) -> Any:
-        if not self.processor:
+        outputs = []
+
+        for processor in self.processors:
+            if not processor:
+                outputs.append(image)
+            outputs.append(processor(image))
+
+        if not outputs:
             return image
 
-        return self.processor(image)
+        return outputs

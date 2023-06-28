@@ -88,7 +88,7 @@ def run(
     coherence_scale=300,
     coherence_alpha=1.0,
     coherence_steps=3,
-    apply_color_matching=False,
+    use_color_matching=False,
     preprocess=None,
 ):
     if pipe is None:
@@ -136,7 +136,7 @@ def run(
         "coherence_scale": coherence_scale,
         "coherence_alpha": coherence_alpha,
         "coherence_steps": coherence_steps,
-        "apply_color_matching": False,
+        "use_color_matching": use_color_matching,
         "preprocess": preprocess,
     }
     save_parameters(run_path, parameters)
@@ -197,7 +197,7 @@ def run(
         coherence_scale=coherence_scale,
         coherence_alpha=coherence_alpha,
         coherence_steps=coherence_steps,
-        apply_color_matching=apply_color_matching,
+        use_color_matching=use_color_matching,
         preprocess=preprocess,
     )
 

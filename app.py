@@ -24,7 +24,7 @@ os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
 os.makedirs(MODEL_PATH, exist_ok=True)
 
 USE_XFORMERS = set_xformers()
-CONTROLNET_PROCESSORS = ["None", "inpaint"] + list(CONTROLNET_PROCESSORS.keys())
+CONTROLNET_PROCESSORS = ["None"] + list(CONTROLNET_PROCESSORS.keys())
 
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
@@ -44,21 +44,25 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
         if controlnet:
             from diffusers import ControlNetModel
 
-            controlnet_model = ControlNetModel.from_pretrained(
-                controlnet, torch_dtype=torch.float16, cache_dir=MODEL_PATH
-            )
-            pipeline_name = "StableDiffusionControlNetPipeline"
+            controlnets = controlnet.split(",")
+            controlnet_models = [
+                ControlNetModel.from_pretrained(
+                    controlnet, torch_dtype=torch.float16, cache_dir=MODEL_PATH
+                )
+                for controlnet in controlnets
+            ]
 
+            pipeline_name = "StableDiffusionControlNetPipeline"
             pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
             pipe = pipe_cls.from_pretrained(
                 model_name,
                 use_auth_token=True,
                 torch_dtype=torch.float16,
                 safety_checker=None,
-                controlnet=controlnet_model,
+                controlnet=controlnet_models,
                 cache_dir=MODEL_PATH,
             )
-            success_message = f"Successfully loaded Pipeline: {pipeline_name} with {model_name} and {controlnet}"
+            success_message = f"Successfully loaded Pipeline: {pipeline_name} with {model_name} and {controlnets}"
 
         else:
             pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
@@ -164,7 +168,7 @@ def predict(
     coherence_scale,
     coherence_alpha,
     coherence_steps,
-    apply_color_matching,
+    use_color_matching,
     preprocessing_type,
 ):
     output = run(
@@ -205,7 +209,7 @@ def predict(
         coherence_scale=coherence_scale,
         coherence_alpha=coherence_alpha,
         coherence_steps=int(coherence_steps),
-        apply_color_matching=apply_color_matching,
+        use_color_matching=use_color_matching,
         preprocess=preprocessing_type,
     )
 
@@ -423,8 +427,8 @@ with demo:
             with gr.Accordion("Controlnet Preprocessing Settings", open=False):
                 preprocessing_type = gr.Dropdown(
                     CONTROLNET_PROCESSORS,
-                    value="None",
                     label="Preprocessing",
+                    multiselect=True,
                 )
 
     pipe = gr.State()
