@@ -133,7 +133,7 @@ class BYOPFlow(BaseFlow):
         self.use_prompt_embeds = use_prompt_embeds
         self.num_latent_channels = num_latent_channels
         self.vae_scale_factor = self.pipe.vae_scale_factor
-        self.additional_pipeline_argumenets = additional_pipeline_arguments
+        self.additional_pipeline_arguments = additional_pipeline_arguments
 
         self.guidance_scale = guidance_scale
         self.num_inference_steps = num_inference_steps
@@ -160,11 +160,14 @@ class BYOPFlow(BaseFlow):
 
         if image_input is not None:
             image_input = self.resize_image_input(image_input)
+            self.height, self.width = image_input.size
+
             self.reference_image = image_input.convert("RGB")
-            self.image_input = self.preprocessor(image_input)
+            self.image_input = image_input
 
         else:
             self.reference_image = self.image_input = None
+            self.height, self.width = height, width
 
         self.video_input = video_input
         self.video_use_pil_format = video_use_pil_format
@@ -173,12 +176,6 @@ class BYOPFlow(BaseFlow):
         if self.video_input is not None:
             self.video_frames, _, _ = load_video_frames(self.video_input)
             _, self.height, self.width = self.video_frames[0].size()
-
-        elif self.image_input is not None:
-            self.height, self.width = self.image_input.size
-
-        else:
-            self.height, self.width = height, width
 
         if audio_input is not None:
             self.audio_array, self.sr = librosa.load(audio_input)
@@ -521,7 +518,7 @@ class BYOPFlow(BaseFlow):
         if "generator" in self.pipe_signature:
             pipe_kwargs.update({"generator": self.generator})
 
-        pipe_kwargs.update(self.additional_pipeline_argumenets)
+        pipe_kwargs.update(self.additional_pipeline_arguments)
 
         return pipe_kwargs
 
@@ -547,8 +544,9 @@ class BYOPFlow(BaseFlow):
 
         return image_input
 
-    @torch.use_no_grad()
+    @torch.no_grad()
     def apply_motion(self, image, idx):
+        image = image[0]
         image = image.convert("RGB")
         image_input = self.motion_callback(image, idx)
 
