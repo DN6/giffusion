@@ -24,7 +24,7 @@ os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
 os.makedirs(MODEL_PATH, exist_ok=True)
 
 USE_XFORMERS = set_xformers()
-CONTROLNET_PROCESSORS = ["None"] + list(CONTROLNET_PROCESSORS.keys())
+CONTROLNET_PROCESSORS = ["no-processing"] + list(CONTROLNET_PROCESSORS.keys())
 
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 

@@ -53,11 +53,13 @@ class Processor:
 
         # check if the proecssor is a checkpoint model
         if MODELS[processor_id]["checkpoint"]:
+            pretrained_model_path = "lllyasviel/Annotators"
             processor = processor.from_pretrained(
-                "lllyasviel/Annotators", cache_dir=MODEL_PATH
+                pretrained_model_path, cache_dir=MODEL_PATH
             )
         else:
             processor = processor()
+
         return processor
 
     def __call__(
@@ -106,15 +108,20 @@ class Preprocessor:
         else:
             return Processor(processor_id)
 
-    def __call__(self, image) -> Any:
+    def __call__(self, images) -> Any:
         outputs = []
 
+        if not isinstance(images, list):
+            images = [images]
+
         for processor in self.processors:
-            if not processor:
-                outputs.append(image)
-            outputs.append(processor(image))
+            for image in images:
+                if processor is None:
+                    outputs.append(image)
+                else:
+                    outputs.append(processor(image))
 
         if not outputs:
-            return image
+            return images
 
         return outputs

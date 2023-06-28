@@ -151,9 +151,6 @@ class BYOPFlow(BaseFlow):
                 f"In order to use MultiControlnet",
                 f"batch size must be set to 1 but found batch size {self.batch_size}",
             )
-
-        if self.pipe.__class__.__name__ != "StableDiffusionControlNetPipeline":
-            self.preprocess = "None"
         self.preprocessor = Preprocessor(self.preprocess)
 
         self.check_inputs(image_input, video_input)
@@ -163,7 +160,7 @@ class BYOPFlow(BaseFlow):
             self.height, self.width = image_input.size
 
             self.reference_image = image_input.convert("RGB")
-            self.image_input = image_input
+            self.image_input = self.preprocessor(image_input)
 
         else:
             self.reference_image = self.image_input = None
@@ -221,19 +218,23 @@ class BYOPFlow(BaseFlow):
             self.motion_callback = MotionCallback(
                 motion_args, padding_mode=padding_mode
             )
-            self.coherence_callback = CoherenceCallback(
-                coherence_scale=coherence_scale,
-                coherence_alpha=coherence_alpha,
-                steps=coherence_steps,
-            )
             self.use_motion = True
         else:
             self.use_motion = False
 
         self.use_coherence = coherence_scale > 0.0 and self.batch_size == 1
+        if self.use_coherence:
+            self.coherence_callback = CoherenceCallback(
+                coherence_scale=coherence_scale,
+                coherence_alpha=coherence_alpha,
+                steps=coherence_steps,
+            )
+        else:
+            self.coherence_callback = None
+
         self.noise_schedule = curve_from_cn_string(noise_schedule)
         self.use_color_matching = use_color_matching
-        self.use_color_matching_only = self.use_color_matching and not self.motion
+        self.use_color_matching_only = self.use_color_matching and not self.use_motion
 
     def check_inputs(self, image_input, video_input):
         if image_input is not None and video_input is not None:
@@ -508,12 +509,12 @@ class BYOPFlow(BaseFlow):
 
         if "image" in self.pipe_signature:
             if (self.video_input is not None) and (len(images) != 0):
-                image_input = [self.preprocessor(image) for image in images]
+                # preprocess the current batch of images
+                image_input = self.preprocessor(images)
                 pipe_kwargs.update({"image": image_input})
 
             elif self.image_input is not None:
-                image_input = self.preprocessor(self.image_input)
-                pipe_kwargs.update({"image": image_input})
+                pipe_kwargs.update({"image": self.image_input})
 
         if "generator" in self.pipe_signature:
             pipe_kwargs.update({"generator": self.generator})
@@ -606,4 +607,4 @@ class BYOPFlow(BaseFlow):
                 if self.use_color_matching:
                     images = self.apply_color_matching(images)
 
-                self.image_input = images
+                self.image_input = self.preprocessor(images)
