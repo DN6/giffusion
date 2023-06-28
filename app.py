@@ -44,7 +44,7 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
         if controlnet:
             from diffusers import ControlNetModel
 
-            controlnets = controlnet.split(",")
+            controlnets = [controlnet.strip() for controlnet in controlnet.split(",")]
             controlnet_models = [
                 ControlNetModel.from_pretrained(
                     controlnet, torch_dtype=torch.float16, cache_dir=MODEL_PATH
