@@ -8,11 +8,11 @@ import pandas as pd
 import torch
 from diffusers import ImagePipelineOutput
 from PIL import Image
-from skimage.exposure import match_histograms
 from torchvision.transforms import ToPILImage, ToTensor
 
 from preprocessor import Preprocessor
 from utils import (
+    apply_lab_color_matching,
     apply_transformation2D,
     curve_from_cn_string,
     get_mel_reduce_func,
@@ -54,7 +54,7 @@ class MotionCallback:
         )
         transformed = ToPILImage()(transformed[0])
 
-        return transformed
+        return [transformed]
 
 
 class CoherenceCallback:
@@ -120,7 +120,7 @@ class BYOPFlow(BaseFlow):
         coherence_alpha=1.0,
         coherence_steps=1,
         noise_schedule="0:(0)",
-        use_color_matching=True,
+        use_color_matching=False,
         preprocess=[],
     ):
         super().__init__(pipe, device, batch_size)
@@ -532,16 +532,9 @@ class BYOPFlow(BaseFlow):
     def apply_color_matching(self, image_input):
         # Color match the transformed image to the reference
         reference_image = self.get_reference_image(image_input[0])
-
         image_input = [
-            match_histograms(
-                np.array((image)),
-                np.array(reference_image),
-                channel_axis=-1,
-            )
-            for image in image_input
+            apply_lab_color_matching(image, reference_image) for image in image_input
         ]
-        image_input = [ToPILImage()(image) for image in image_input]
 
         return image_input
 

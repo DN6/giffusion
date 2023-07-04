@@ -5,10 +5,12 @@ import librosa
 import numpy as np
 import torch
 from keyframed.dsl import curve_from_cn_string
+from kornia.color import lab_to_rgb, rgb_to_lab
 from kornia.geometry.transform import get_affine_matrix2d, warp_affine
 from PIL import Image
+from skimage.exposure import match_histograms
 from torchvision.io import read_video, write_video
-from torchvision.transforms.functional import pil_to_tensor, to_pil_image
+from torchvision.transforms import ToPILImage, ToTensor
 
 
 def apply_transformation2D(
@@ -37,6 +39,29 @@ def apply_transformation2D(
     )
 
     return transformed_img
+
+
+def apply_lab_color_matching(image, reference_image):
+    to_tensor = ToTensor()
+    to_pil_image = ToPILImage()
+
+    image = to_tensor(image).unsqueeze(0)
+    reference_image = to_tensor(reference_image).unsqueeze(0)
+
+    image = rgb_to_lab(image)
+    reference_image = rgb_to_lab(reference_image)
+
+    output = match_histograms(
+        np.array(image[0].permute(1, 2, 0)),
+        np.array(reference_image[0].permute(1, 2, 0)),
+        channel_axis=-1,
+    )
+
+    output = to_tensor(output).unsqueeze(0)
+    output = lab_to_rgb(output)
+    output = to_pil_image(output[0])
+
+    return output
 
 
 def parse_key_frames(prompts, prompt_parser=None):
@@ -185,11 +210,13 @@ def save_video(frames, filename="./output.mp4", fps=24, quality=95, audio_input=
     if quality < 95:
         imgs = list(map(lambda x: x.resize((128, 128), Image.LANCZOS), imgs))
 
-    img_tensors = [pil_to_tensor(img) for img in imgs]
+    img_tensors = [ToTensor()(img) for img in imgs]
     img_tensors = list(map(lambda x: x.unsqueeze(0), img_tensors))
 
     img_tensors = torch.cat(img_tensors)
+    img_tensors = img_tensors * 255.0
     img_tensors = img_tensors.permute(0, 2, 3, 1)
+    img_tensors = img_tensors.to(torch.uint8)
 
     if audio_input is not None:
         audio_duration = len(img_tensors) / fps

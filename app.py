@@ -9,11 +9,11 @@ from PIL import Image
 
 from generate import run
 from utils import (
+    ToPILImage,
     get_audio_key_frame_information,
     get_video_frame_information,
     load_video_frames,
     set_xformers,
-    to_pil_image,
 )
 
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
@@ -121,7 +121,7 @@ def send_to_image_input(output, frame_id):
         output_image = image.seek(frame_id)
     else:
         frames, _, _ = load_video_frames(output)
-        output_image = to_pil_image(frames[int(frame_id)])
+        output_image = ToPILImage()(frames[int(frame_id)])
 
     return output_image
 
