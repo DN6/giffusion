@@ -157,7 +157,7 @@ class BYOPFlow(BaseFlow):
 
         if image_input is not None:
             image_input = self.resize_image_input(image_input)
-            self.height, self.width = image_input.size
+            self.width, self.height = image_input.size
 
             self.reference_image = image_input.convert("RGB")
             self.image_input = self.preprocessor(image_input)
