@@ -8,13 +8,9 @@ from controlnet_aux.processor import MODELS as CONTROLNET_PROCESSORS
 from PIL import Image
 
 from generate import run
-from utils import (
-    ToPILImage,
-    get_audio_key_frame_information,
-    get_video_frame_information,
-    load_video_frames,
-    set_xformers,
-)
+from utils import (ToPILImage, get_audio_key_frame_information,
+                   get_video_frame_information, load_video_frames,
+                   set_xformers)
 
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "generated")
@@ -343,7 +339,7 @@ with demo:
                         0, 10000, step=50, value=0, label="Coherence Scale"
                     )
                     coherence_alpha = gr.Slider(
-                        0, 1.0, step=0.1, value=0.1, label="Coherence Alpha"
+                        0, 1.0, step=0.1, value=1.0, label="Coherence Alpha"
                     )
                     coherence_steps = gr.Slider(
                         0, 100, step=1, value=1, label="Coherence Steps"
