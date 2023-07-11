@@ -23,6 +23,13 @@ Giffusion supports using any pipeline and compatible checkpoint from the [Diffus
 
 Giffusion allows you to use the `StableDiffusionControlNetPipeline`. Simply paste in the ControlNet checkpoint you would like to use to load in the Pipeline.
 
+MultiControlnet's are also supported. Just paste in a list of model checkpoint paths from the Hugging Face Hub
+
+```text
+lllyasviel/control_v11p_sd15_softedge, lllyasviel/control_v11f1p_sd15_depth
+```
+
+**Notes on Preprocessing:** When using Controlnets, you need to preprocess your inputs before using them as conditioning signals for the model. The Controlnet Preprocessing Settings allow you to choose a set of preprocessing options to apply to your image. Be sure to select them in the same order as your Controlnet models. For example, for the code snippet above, you would have to select the softedge preprocessor before the depth one. If you are using a Controlnet model that requires no processing that in a MultiControlnet setting, a `no-processing` option is also provided.
 
 ### Multiframe Generation
 
@@ -230,6 +237,30 @@ Giffusion allows you to use key frame animation strings to control the angle, zo
 ```
 0: (5.0),1: (5.0),2: (5.0),3: (5.0),4: (5.0),5: (5.0),6: (5.0),7: (5.0),8: (5.0),9: (5.0),10: (5.0)
 ```
+
+### Coherence
+
+Coherence is a method to preserve features across frames when creating animations. It is only applicable to models that produce a latent code while running the diffusion process. In order to do this, we compute the gradient of the current latent with respect to a reference latent (usually the latent of the previous frame)
+
+```python
+# compute the gradient for the current latent wrt the reference latent
+for step in range(coherence_steps):
+    loss = (latents - reference_latent).pow(2).mean()
+    cond_grad = torch.autograd.grad(loss, latents)[0]
+
+    latents = latents - (coherence_scale * cond_grad)
+
+# update the reference latent based on coherence alpha value
+reference_latent = (coherence_alpha * latents) + (
+    1.0 - coherence_alpha
+) * reference_latent
+```
+
+1. **Coherence Scale:** Increasing this value will make the current frame look more like the reference frame
+2. **Coherence Alpha:** Controls how much to blend the current frame's latent code with the reference frame's latent code. Increasing the value will weigh more recent frames when computing the gradient.
+3. **Coherence Steps:** Number of gradient update steps made to the current latent code in order to match the reference latent code.
+4. **Noise Schedule:** Amount of noise to add to a latent code for diffusion diversity. Higher values lead to more diversity. Noise is only applied if Coherence is greater than 0.0
+5. **Apply Color Matching:** Apply LAB histogram color matching to the current frame using the first generated frame as a reference. This can help reduce dramatic changes in color across images during the generation process.
 
 ## Output Settings
 
