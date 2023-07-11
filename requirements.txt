@@ -1,5 +1,5 @@
 transformers
-diffusers
+diffusers==0.17.1
 accelerate
 typer
 av<10.0.0
