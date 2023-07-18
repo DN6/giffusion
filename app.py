@@ -8,9 +8,13 @@ from controlnet_aux.processor import MODELS as CONTROLNET_PROCESSORS
 from PIL import Image
 
 from generate import run
-from utils import (ToPILImage, get_audio_key_frame_information,
-                   get_video_frame_information, load_video_frames,
-                   set_xformers)
+from utils import (
+    ToPILImage,
+    get_audio_key_frame_information,
+    get_video_frame_information,
+    load_video_frames,
+    set_xformers,
+)
 
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "generated")
@@ -270,9 +274,7 @@ with demo:
                         value=7.5,
                         label="Classifier Free Guidance Scale",
                     )
-                    strength = gr.Slider(
-                        0, 1.0, step=0.1, value=0.5, label="Image Strength"
-                    )
+                    strength = gr.Textbox(label="Image Strength Schedule")
                     num_latent_channels = gr.Number(
                         value=4, label="Number of Latent Channels"
                     )

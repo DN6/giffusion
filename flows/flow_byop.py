@@ -95,7 +95,7 @@ class BYOPFlow(BaseFlow):
         device,
         guidance_scale=7.5,
         num_inference_steps=50,
-        strength=0.5,
+        strength="0:(0.5)",
         height=512,
         width=512,
         use_fixed_latent=False,
@@ -137,7 +137,7 @@ class BYOPFlow(BaseFlow):
 
         self.guidance_scale = guidance_scale
         self.num_inference_steps = num_inference_steps
-        self.strength = strength
+        self.strength = curve_from_cn_string(strength)
         self.seed = seed
 
         self.device = device
@@ -479,6 +479,7 @@ class BYOPFlow(BaseFlow):
         prompts = batch["prompts"]
         latents = batch["init_latents"]
         images = batch["images"]
+        frame_ids = batch["frame_ids"]
 
         pipe_kwargs = dict(
             num_inference_steps=self.num_inference_steps,
@@ -492,7 +493,7 @@ class BYOPFlow(BaseFlow):
             pipe_kwargs.update({"width": self.width})
 
         if "strength" in self.pipe_signature:
-            pipe_kwargs.update({"strength": self.strength})
+            pipe_kwargs.update({"strength": self.strength[frame_ids[0]]})
 
         if "latents" in self.pipe_signature:
             pipe_kwargs.update({"latents": latents})
