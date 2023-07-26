@@ -56,7 +56,6 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
             pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
             pipe = pipe_cls.from_pretrained(
                 model_name,
-                use_auth_token=True,
                 torch_dtype=torch.float16,
                 safety_checker=None,
                 controlnet=controlnet_models,
