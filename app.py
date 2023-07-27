@@ -273,7 +273,9 @@ with demo:
                         value=7.5,
                         label="Classifier Free Guidance Scale",
                     )
-                    strength = gr.Textbox(label="Image Strength Schedule")
+                    strength = gr.Textbox(
+                        label="Image Strength Schedule", value="0:(0.5)"
+                    )
                     num_latent_channels = gr.Number(
                         value=4, label="Number of Latent Channels"
                     )
