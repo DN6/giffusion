@@ -401,6 +401,7 @@ class BYOPFlow(BaseFlow):
                 self.height // self.vae_scale_factor,
                 self.width // self.vae_scale_factor,
             ),
+            dtype=self.pipe.unet.dtype,
             device=self.pipe.device,
             generator=self.generator,
         )
@@ -421,6 +422,7 @@ class BYOPFlow(BaseFlow):
                         self.height // self.vae_scale_factor,
                         self.width // self.vae_scale_factor,
                     ),
+                    dtype=self.pipe.unet.dtype,
                     device=self.pipe.device,
                     generator=self.generator.manual_seed(self.seed_schedule[end_frame]),
                 )
@@ -562,24 +564,25 @@ class BYOPFlow(BaseFlow):
 
     def run_inference(self, batch):
         pipe_kwargs = self.prepare_inputs(batch)
-        with torch.autocast("cuda"):
-            if self.use_coherence:
-                output = self.pipe(**pipe_kwargs, output_type="latent")
-                if isinstance(output, np.ndarray):
-                    latents = ToTensor()(output)
-                else:
-                    latents = output.images
+        if self.use_coherence:
+            output = self.pipe(**pipe_kwargs, output_type="latent")
 
-                latents = self.apply_coherence(latents, batch)
-                with torch.no_grad():
-                    image = self.pipe.decode_latents(latents)
-                    image = self.postprocess(image, output_type="pil")
-
-                return ImagePipelineOutput(images=image)
-
+            if isinstance(output, np.ndarray):
+                latents = ToTensor()(output)
             else:
-                output = self.pipe(**pipe_kwargs)
-                return output
+                latents = output.images
+
+            latents = self.apply_coherence(latents, batch)
+
+            with torch.no_grad():
+                image = self.pipe.decode_latents(latents)
+                image = self.postprocess(image, output_type="pil")
+
+            return ImagePipelineOutput(images=image)
+
+        else:
+            output = self.pipe(**pipe_kwargs)
+            return output
 
     def create(self, frames=None):
         batchgen = self.batch_generator(
