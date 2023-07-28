@@ -1,5 +1,5 @@
 transformers
-diffusers==0.17.1
+diffusers
 accelerate
 typer
 av<10.0.0
@@ -14,3 +14,4 @@ triton
 torch
 torchvision
 controlnet-aux @ git+https://github.com/patrickvonplaten/controlnet_aux.git@8958bb75bcd1dfab8880a7a9ccb105865c6e57df
+invisible-watermark>=0.2.0
