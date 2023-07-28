@@ -4,20 +4,27 @@ import pathlib
 
 import gradio as gr
 import torch
+from controlnet_aux.processor import MODELS as CONTROLNET_PROCESSORS
 from PIL import Image
 
 from generate import run
 from utils import (
+    ToPILImage,
     get_audio_key_frame_information,
     get_video_frame_information,
     load_video_frames,
     set_xformers,
-    to_pil_image,
 )
 
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
-OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
+OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "generated")
+MODEL_PATH = os.getenv("MODEL_PATH", "models")
+
+os.makedirs(OUTPUT_BASE_PATH, exist_ok=True)
+os.makedirs(MODEL_PATH, exist_ok=True)
+
 USE_XFORMERS = set_xformers()
+CONTROLNET_PROCESSORS = ["no-processing"] + list(CONTROLNET_PROCESSORS.keys())
 
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
@@ -31,23 +38,30 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
             del pipe
             torch.cuda.empty_cache()
 
+        success_message = (
+            f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
+        )
         if controlnet:
             from diffusers import ControlNetModel
 
-            controlnet_model = ControlNetModel.from_pretrained(
-                controlnet, torch_dtype=torch.float16, cache_dir=OUTPUT_BASE_PATH
-            )
-            pipeline_name = "StableDiffusionControlNetPipeline"
+            controlnets = [controlnet.strip() for controlnet in controlnet.split(",")]
+            controlnet_models = [
+                ControlNetModel.from_pretrained(
+                    controlnet, torch_dtype=torch.float16, cache_dir=MODEL_PATH
+                )
+                for controlnet in controlnets
+            ]
 
+            pipeline_name = "StableDiffusionControlNetPipeline"
             pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
             pipe = pipe_cls.from_pretrained(
                 model_name,
-                use_auth_token=True,
                 torch_dtype=torch.float16,
                 safety_checker=None,
-                controlnet=controlnet_model,
-                cache_dir=OUTPUT_BASE_PATH,
+                controlnet=controlnet_models,
+                cache_dir=MODEL_PATH,
             )
+            success_message = f"Successfully loaded Pipeline: {pipeline_name} with {model_name} and {controlnets}"
 
         else:
             pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
@@ -56,7 +70,7 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
                 use_auth_token=True,
                 torch_dtype=torch.float16,
                 safety_checker=None,
-                cache_dir=OUTPUT_BASE_PATH,
+                cache_dir=MODEL_PATH,
             )
 
         if hasattr(pipe, "enable_model_cpu_offload"):
@@ -64,10 +78,13 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
         else:
             pipe.to(device)
 
+        if hasattr(pipe, "enable_vae_tiling"):
+            pipe.enable_vae_tiling()
+
         if USE_XFORMERS:
             pipe.enable_xformers_memory_efficient_attention()
 
-        return pipe, f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
+        return pipe, success_message
 
     except Exception as e:
         print(e)
@@ -103,7 +120,7 @@ def send_to_image_input(output, frame_id):
         output_image = image.seek(frame_id)
     else:
         frames, _, _ = load_video_frames(output)
-        output_image = to_pil_image(frames[int(frame_id)])
+        output_image = ToPILImage()(frames[int(frame_id)])
 
     return output_image
 
@@ -138,6 +155,7 @@ def predict(
     video_use_pil_format,
     output_format,
     model_name,
+    controlnet_name,
     additional_pipeline_arguments,
     interpolation_type,
     interpolation_args,
@@ -145,6 +163,12 @@ def predict(
     translate_x,
     translate_y,
     angle,
+    padding_mode,
+    coherence_scale,
+    coherence_alpha,
+    coherence_steps,
+    use_color_matching,
+    preprocessing_type,
 ):
     output = run(
         pipe=pipe,
@@ -172,6 +196,7 @@ def predict(
         video_use_pil_format=video_use_pil_format,
         output_format=output_format,
         model_name=model_name,
+        controlnet_name=controlnet_name,
         additional_pipeline_arguments=additional_pipeline_arguments,
         interpolation_type=interpolation_type,
         interpolation_args=interpolation_args,
@@ -179,6 +204,12 @@ def predict(
         translate_x=translate_x,
         translate_y=translate_y,
         angle=angle,
+        padding_mode=padding_mode,
+        coherence_scale=coherence_scale,
+        coherence_alpha=coherence_alpha,
+        coherence_steps=int(coherence_steps),
+        use_color_matching=use_color_matching,
+        preprocess=preprocessing_type,
     )
 
     return output
@@ -206,7 +237,9 @@ with demo:
                         with gr.Row():
                             load_message = gr.Markdown()
 
-            with gr.Accordion("Output Settings: Set output file format and FPS"):
+            with gr.Accordion(
+                "Output Settings: Set output file format and FPS", open=False
+            ):
                 with gr.Row():
                     with gr.Column():
                         with gr.Row():
@@ -219,63 +252,64 @@ with demo:
                             )
 
             with gr.Accordion("Diffusion Settings", open=False):
-                use_fixed_latent = gr.Checkbox(label="Use Fixed Init Latent")
-                use_prompt_embeds = gr.Checkbox(
-                    label="Use Prompt Embeds", value=True, interactive=True
-                )
-                seed = gr.Number(value=42, label="Numerical Seed")
-                batch_size = gr.Slider(1, 64, step=1, value=1, label="Batch Size")
-                num_iteration_steps = gr.Slider(
-                    10,
-                    1000,
-                    step=10,
-                    value=20,
-                    label="Number of Iteration Steps",
-                )
-                guidance_scale = gr.Slider(
-                    0.5,
-                    20,
-                    step=0.5,
-                    value=7.5,
-                    label="Classifier Free Guidance Scale",
-                )
-                strength = gr.Slider(
-                    0, 1.0, step=0.1, value=0.5, label="Image Strength"
-                )
-                use_default_scheduler = gr.Checkbox(
-                    label="Use Default Pipeline Scheduler"
-                )
-                scheduler = gr.Dropdown(
-                    [
-                        "klms",
-                        "ddim",
-                        "ddpm",
-                        "pndms",
-                        "dpm",
-                        "dpm_ads",
-                        "deis",
-                        "euler",
-                        "euler_ads",
-                        "repaint",
-                        "unipc",
-                    ],
-                    value="deis",
-                    label="Scheduler",
-                )
-                scheduler_kwargs = gr.Textbox(
-                    label="Scheduler Arguments",
-                    value="{}",
-                )
+                with gr.Tab("Diffusion"):
+                    use_fixed_latent = gr.Checkbox(label="Use Fixed Init Latent")
+                    use_prompt_embeds = gr.Checkbox(
+                        label="Use Prompt Embeds", value=True, interactive=True
+                    )
+                    seed = gr.Number(value=42, label="Numerical Seed")
+                    batch_size = gr.Slider(1, 64, step=1, value=1, label="Batch Size")
+                    num_iteration_steps = gr.Slider(
+                        10,
+                        1000,
+                        step=10,
+                        value=20,
+                        label="Number of Iteration Steps",
+                    )
+                    guidance_scale = gr.Slider(
+                        0.5,
+                        20,
+                        step=0.5,
+                        value=7.5,
+                        label="Classifier Free Guidance Scale",
+                    )
+                    strength = gr.Textbox(
+                        label="Image Strength Schedule", value="0:(0.5)"
+                    )
+                    num_latent_channels = gr.Number(
+                        value=4, label="Number of Latent Channels"
+                    )
+                    image_height = gr.Number(value=512, label="Image Height")
+                    image_width = gr.Number(value=512, label="Image Width")
 
-                image_height = gr.Number(value=512, label="Image Height")
-                image_width = gr.Number(value=512, label="Image Width")
-                num_latent_channels = gr.Number(
-                    value=4, label="Number of Latent Channels"
-                )
+                with gr.Tab("Scheduler"):
+                    use_default_scheduler = gr.Checkbox(
+                        label="Use Default Pipeline Scheduler"
+                    )
+                    scheduler = gr.Dropdown(
+                        [
+                            "klms",
+                            "ddim",
+                            "ddpm",
+                            "pndms",
+                            "dpm",
+                            "dpm_ads",
+                            "deis",
+                            "euler",
+                            "euler_ads",
+                            "unipc",
+                        ],
+                        value="deis",
+                        label="Scheduler",
+                    )
+                    scheduler_kwargs = gr.Textbox(
+                        label="Scheduler Arguments",
+                        value="{}",
+                    )
 
-                with gr.Accordion("Additional Pipeline Arguments", open=False):
+                with gr.Tab("Pipeline"):
                     additional_pipeline_arguments = gr.Textbox(
-                        label="",
+                        label="Additional Pipeline Arguments",
                         value="{}",
                         interactive=True,
                         lines=4,
@@ -283,19 +317,42 @@ with demo:
                     )
 
             with gr.Accordion("Animation Settings", open=False):
-                interpolation_type = gr.Dropdown(
-                    ["linear", "sine", "curve"],
-                    value="linear",
-                    label="Interpolation Type",
-                )
-                interpolation_args = gr.Textbox(
-                    "", label="Interpolation Parameters", visible=True
-                )
+                with gr.Tab("Interpolation"):
+                    interpolation_type = gr.Dropdown(
+                        ["linear", "sine", "curve"],
+                        value="linear",
+                        label="Interpolation Type",
+                    )
+                    interpolation_args = gr.Textbox(
+                        "", label="Interpolation Parameters", visible=True
+                    )
+                with gr.Tab("Motion"):
+                    zoom = gr.Textbox("", label="Zoom")
+                    translate_x = gr.Textbox("", label="Translate_X")
+                    translate_y = gr.Textbox("", label="Translate_Y")
+                    angle = gr.Textbox("", label="Angle")
+                    padding_mode = gr.Dropdown(
+                        ["zero", "border", "reflection"],
+                        label="Padding Mode",
+                        value="border",
+                    )
 
-                zoom = gr.Textbox("", label="Zoom")
-                translate_x = gr.Textbox("", label="Translate_X")
-                translate_y = gr.Textbox("", label="Translate_Y")
-                angle = gr.Textbox("", label="Angle")
+                with gr.Tab("Coherence"):
+                    coherence_scale = gr.Slider(
+                        0, 10000, step=50, value=0, label="Coherence Scale"
+                    )
+                    coherence_alpha = gr.Slider(
+                        0, 1.0, step=0.1, value=1.0, label="Coherence Alpha"
+                    )
+                    coherence_steps = gr.Slider(
+                        0, 100, step=1, value=1, label="Coherence Steps"
+                    )
+                    noise_schedule = gr.Textbox(
+                        label="Noise Schedule", value="0:(0.01)", interactive=True
+                    )
+                    apply_color_matching = gr.Checkbox(
+                        label="Use Color Matching", value=False, interactive=True
+                    )
 
             with gr.Accordion("Inspiration Settings", open=False):
                 with gr.Row():
@@ -331,7 +388,7 @@ with demo:
                 )
             with gr.Row():
                 negative_prompt_input = gr.Textbox(
-                    value="""low resolution""",
+                    value="""low resolution, blurry, worst quality, jpeg artifacts""",
                     label="Negative Prompts",
                     interactive=True,
                 )
@@ -357,7 +414,7 @@ with demo:
             with gr.Accordion("Video Input", open=False):
                 video_input = gr.Video(label="Video Input")
                 video_info_btn = gr.Button(value="Get Key Frame Infomation")
-                video_use_pil_format = gr.Checkbox(label="Use PIL Format", value=False)
+                video_use_pil_format = gr.Checkbox(label="Use PIL Format", value=True)
 
             with gr.Accordion("Resample Output", open=False):
                 with gr.Accordion("Send to Image Input", open=False):
@@ -365,6 +422,13 @@ with demo:
                     send_to_image_input_btn = gr.Button("Send to Image Input")
                 with gr.Accordion("Send to Video Input", open=False):
                     send_to_video_input_btn = gr.Button("Send to Video Input")
+
+            with gr.Accordion("Controlnet Preprocessing Settings", open=False):
+                preprocessing_type = gr.Dropdown(
+                    CONTROLNET_PROCESSORS,
+                    label="Preprocessing",
+                    multiselect=True,
+                )
 
     pipe = gr.State()
 
@@ -421,6 +485,7 @@ with demo:
             video_use_pil_format,
             output_format,
             model_name,
+            controlnet,
             additional_pipeline_arguments,
             interpolation_type,
             interpolation_args,
@@ -428,6 +493,12 @@ with demo:
             translate_x,
             translate_y,
             angle,
+            padding_mode,
+            coherence_scale,
+            coherence_alpha,
+            coherence_steps,
+            apply_color_matching,
+            preprocessing_type,
         ],
         outputs=output,
     )

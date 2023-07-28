@@ -1,9 +1,9 @@
+import json
 import logging
 import os
-import json
 from datetime import datetime
-import typer
 
+import typer
 from diffusers.schedulers import (
     DDIMScheduler,
     DDPMScheduler,
@@ -17,14 +17,13 @@ from diffusers.schedulers import (
     RePaintScheduler,
     UniPCMultistepScheduler,
 )
-
 from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
 
 from comet import start_experiment
 from flows import BYOPFlow
 from flows.flow_byop import BYOPFlow
-from utils import save_gif, save_video, save_parameters
+from utils import save_gif, save_parameters, save_video
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +76,7 @@ def run(
     video_use_pil_format=False,
     output_format="mp4",
     model_name="runwayml/stable-diffusion-v1-5",
+    controlnet_name=None,
     additional_pipeline_arguments="{}",
     interpolation_type="linear",
     interpolation_args="",
@@ -84,6 +84,12 @@ def run(
     translate_x="",
     translate_y="",
     angle="",
+    padding_mode="border",
+    coherence_scale=300,
+    coherence_alpha=1.0,
+    coherence_steps=3,
+    use_color_matching=False,
+    preprocess=None,
 ):
     if pipe is None:
         raise ValueError(
@@ -117,6 +123,7 @@ def run(
         "output_format": output_format,
         "pipeline_name": pipe.__class__.__name__,
         "model_name": model_name,
+        "controlnet_name": controlnet_name,
         "scheduler_kwargs": scheduler_kwargs,
         "additional_pipeline_arguments": additional_pipeline_arguments,
         "interpolation_type": interpolation_type,
@@ -125,6 +132,12 @@ def run(
         "translate_x": translate_x,
         "translate_y": translate_y,
         "angle": angle,
+        "padding_mode": padding_mode,
+        "coherence_scale": coherence_scale,
+        "coherence_alpha": coherence_alpha,
+        "coherence_steps": coherence_steps,
+        "use_color_matching": use_color_matching,
+        "preprocess": preprocess,
     }
     save_parameters(run_path, parameters)
 
@@ -145,12 +158,13 @@ def run(
 
         pipe.scheduler = load_scheduler(scheduler, **scheduler_kwargs)
 
-    animation_args = {
+    motion_args = {
         "zoom": zoom,
         "translate_x": translate_x,
         "translate_y": translate_y,
         "angle": angle,
     }
+
     additional_pipeline_arguments = json.loads(additional_pipeline_arguments)
 
     flow = BYOPFlow(
@@ -178,25 +192,29 @@ def run(
         additional_pipeline_arguments=additional_pipeline_arguments,
         interpolation_type=interpolation_type,
         interpolation_args=interpolation_args,
-        animation_args=animation_args,
+        motion_args=motion_args,
+        padding_mode=padding_mode,
+        coherence_scale=coherence_scale,
+        coherence_alpha=coherence_alpha,
+        coherence_steps=coherence_steps,
+        use_color_matching=use_color_matching,
+        preprocess=preprocess,
     )
 
     max_frames = flow.max_frames
     output_frames = []
 
     image_generator = flow.create()
-    frame_idx = 0
 
-    for output in tqdm(image_generator, total=max_frames // flow.batch_size):
+    for output, frame_ids in tqdm(image_generator, total=max_frames // flow.batch_size):
         images = output.images
-        for image in images:
+        for image, frame_idx in zip(images, frame_ids):
             img_save_path = f"{run_image_save_path}/{frame_idx:04d}.png"
             image.save(img_save_path)
             output_frames.append(img_save_path)
 
             if experiment:
                 experiment.log_image(img_save_path, image_name="frame", step=frame_idx)
-            frame_idx += 1
 
     if output_format == "gif":
         output_filename = f"{run_path}/output.gif"
@@ -213,8 +231,6 @@ def run(
 
     if experiment:
         experiment.log_asset(output_filename)
-
-    save_parameters(run_path, parameters)
 
     return output_filename
 

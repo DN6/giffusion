@@ -1,27 +1,31 @@
 import inspect
-import json
 import random
+from typing import Any
 
 import librosa
 import numpy as np
 import pandas as pd
 import torch
+from diffusers import ImagePipelineOutput
+from PIL import Image
 from torchvision.transforms import ToPILImage, ToTensor
+
+from preprocessor import Preprocessor
 from utils import (
+    apply_lab_color_matching,
     apply_transformation2D,
     curve_from_cn_string,
     get_mel_reduce_func,
     load_video_frames,
     parse_key_frames,
     slerp,
-    sync_prompts_to_video,
 )
 
 from .flow_base import BaseFlow
 
 
-class AnimationCallback:
-    def __init__(self, animation_args):
+class MotionCallback:
+    def __init__(self, animation_args, padding_mode="border"):
         self.zoom = animation_args.get("zoom", curve_from_cn_string("0:(1.0)"))
         self.translate_x = animation_args.get(
             "translate_x", curve_from_cn_string("0:(0.0)")
@@ -30,10 +34,11 @@ class AnimationCallback:
             "translate_y", curve_from_cn_string("0:(0.0)")
         )
         self.angle = animation_args.get("angle", curve_from_cn_string("0:(0.0)"))
+        self.padding_mode = padding_mode
 
-    def __call__(self, image, frame_idx):
-        image_tensor = ToTensor()(image)
-        image_tensor = image_tensor.unsqueeze(0)
+    def __call__(self, image, batch):
+        frame_idx = batch["frame_ids"][0]
+        image_tensor = ToTensor()(image).unsqueeze(0)
 
         animations = {
             "zoom": self.zoom[frame_idx],
@@ -41,8 +46,45 @@ class AnimationCallback:
             "translate_y": self.translate_y[frame_idx],
             "angle": self.angle[frame_idx],
         }
-        transformed = apply_transformation2D(image_tensor, animations)
-        return transformed
+
+        transformed = apply_transformation2D(
+            image_tensor,
+            animations,
+            padding_mode=self.padding_mode,
+        )
+        transformed = ToPILImage()(transformed[0])
+
+        return [transformed]
+
+
+class CoherenceCallback:
+    def __init__(
+        self, init_latent=None, coherence_scale=300, coherence_alpha=0.0, steps=5
+    ):
+        self.init_latent = init_latent
+        self.coherence_scale = coherence_scale
+        self.coherence_alpha = coherence_alpha
+        self.steps = steps
+
+    def apply_coherence_guidance(self, latents):
+        for step in range(self.steps):
+            loss = (latents - self.init_latent).pow(2).mean()
+            cond_grad = torch.autograd.grad(loss, latents)[0]
+
+            latents = latents - (self.coherence_scale * cond_grad)
+
+        return latents.detach()
+
+    def __call__(self, latents):
+        latents.requires_grad = True
+        with torch.enable_grad():
+            latents = self.apply_coherence_guidance(latents)
+
+        self.init_latent = (self.coherence_alpha * latents) + (
+            1.0 - self.coherence_alpha
+        ) * self.init_latent
+
+        return latents
 
 
 class BYOPFlow(BaseFlow):
@@ -53,7 +95,7 @@ class BYOPFlow(BaseFlow):
         device,
         guidance_scale=7.5,
         num_inference_steps=50,
-        strength=0.5,
+        strength="0:(0.5)",
         height=512,
         width=512,
         use_fixed_latent=False,
@@ -72,10 +114,16 @@ class BYOPFlow(BaseFlow):
         additional_pipeline_arguments={},
         interpolation_type="linear",
         interpolation_args="",
-        animation_args=None,
+        motion_args=None,
+        padding_mode="border",
+        coherence_scale=350,
+        coherence_alpha=1.0,
+        coherence_steps=1,
+        noise_schedule="0:(0)",
+        use_color_matching=False,
+        preprocess=[],
     ):
         super().__init__(pipe, device, batch_size)
-
         self.pipe_signature = set(inspect.signature(self.pipe).parameters.keys())
 
         self.text_prompts = text_prompts
@@ -85,11 +133,11 @@ class BYOPFlow(BaseFlow):
         self.use_prompt_embeds = use_prompt_embeds
         self.num_latent_channels = num_latent_channels
         self.vae_scale_factor = self.pipe.vae_scale_factor
-        self.additional_pipeline_argumenets = additional_pipeline_arguments
+        self.additional_pipeline_arguments = additional_pipeline_arguments
 
         self.guidance_scale = guidance_scale
         self.num_inference_steps = num_inference_steps
-        self.strength = strength
+        self.strength = curve_from_cn_string(strength)
         self.seed = seed
 
         self.device = device
@@ -97,8 +145,27 @@ class BYOPFlow(BaseFlow):
 
         self.fps = fps
 
+        self.preprocess = preprocess
+        if len(self.preprocess) > 1 and self.batch_size > 1:
+            raise ValueError(
+                f"In order to use MultiControlnet",
+                f"batch size must be set to 1 but found batch size {self.batch_size}",
+            )
+        self.preprocessor = Preprocessor(self.preprocess)
+
         self.check_inputs(image_input, video_input)
-        self.image_input = image_input
+
+        if image_input is not None:
+            image_input = self.resize_image_input(image_input)
+            self.width, self.height = image_input.size
+
+            self.reference_image = image_input.convert("RGB")
+            self.image_input = self.preprocessor(image_input)
+
+        else:
+            self.reference_image = self.image_input = None
+            self.height, self.width = height, width
+
         self.video_input = video_input
         self.video_use_pil_format = video_use_pil_format
 
@@ -106,12 +173,6 @@ class BYOPFlow(BaseFlow):
         if self.video_input is not None:
             self.video_frames, _, _ = load_video_frames(self.video_input)
             _, self.height, self.width = self.video_frames[0].size()
-
-        elif self.image_input is not None:
-            self.height, self.width = self.image_input.size
-
-        else:
-            self.height, self.width = height, width
 
         if audio_input is not None:
             self.audio_array, self.sr = librosa.load(audio_input)
@@ -146,17 +207,34 @@ class BYOPFlow(BaseFlow):
         else:
             self.prompts = self.get_prompts(key_frames)
 
-        animation_args = self.prep_animation_args(animation_args)
-        if animation_args:
+        motion_args = self.prep_animation_args(motion_args)
+        if motion_args:
             if self.batch_size != 1:
                 raise ValueError(
                     f"In order to use Animation Arguments",
                     f"batch size must be set to 1 but found batch size {self.batch_size}",
                 )
-            self.animation_callback = AnimationCallback(animation_args)
-            self.animate = True
+
+            self.motion_callback = MotionCallback(
+                motion_args, padding_mode=padding_mode
+            )
+            self.use_motion = True
         else:
-            self.animate = False
+            self.use_motion = False
+
+        self.use_coherence = coherence_scale > 0.0 and self.batch_size == 1
+        if self.use_coherence:
+            self.coherence_callback = CoherenceCallback(
+                coherence_scale=coherence_scale,
+                coherence_alpha=coherence_alpha,
+                steps=coherence_steps,
+            )
+        else:
+            self.coherence_callback = None
+
+        self.noise_schedule = curve_from_cn_string(noise_schedule)
+        self.use_color_matching = use_color_matching
+        self.use_color_matching_only = self.use_color_matching and not self.use_motion
 
     def check_inputs(self, image_input, video_input):
         if image_input is not None and video_input is not None:
@@ -164,6 +242,16 @@ class BYOPFlow(BaseFlow):
                 f"Cannot forward both `image_input` and `video_input`. Please make sure to"
                 " only forward one of the two."
             )
+
+    def resize_image_input(self, image_input):
+        # Resize so image size is divisible by 8
+        height, width = image_input.size
+        resized_height = height - (height % 8)
+        resized_width = width - (width % 8)
+
+        image_input = image_input.resize((resized_height, resized_width), Image.LANCZOS)
+
+        return image_input
 
     def prep_animation_args(self, animation_args):
         output = {}
@@ -313,6 +401,7 @@ class BYOPFlow(BaseFlow):
                 self.height // self.vae_scale_factor,
                 self.width // self.vae_scale_factor,
             ),
+            dtype=self.pipe.unet.dtype,
             device=self.pipe.device,
             generator=self.generator,
         )
@@ -333,6 +422,7 @@ class BYOPFlow(BaseFlow):
                         self.height // self.vae_scale_factor,
                         self.width // self.vae_scale_factor,
                     ),
+                    dtype=self.pipe.unet.dtype,
                     device=self.pipe.device,
                     generator=self.generator.manual_seed(self.seed_schedule[end_frame]),
                 )
@@ -376,6 +466,7 @@ class BYOPFlow(BaseFlow):
                     images = list(map(lambda x: ToPILImage()(x[0]), images))
                 else:
                     images = torch.cat(images, dim=0)
+
             else:
                 images = []
 
@@ -383,12 +474,14 @@ class BYOPFlow(BaseFlow):
                 "prompts": prompts,
                 "init_latents": latents,
                 "images": images,
+                "frame_ids": frame_batch,
             }
 
     def prepare_inputs(self, batch):
         prompts = batch["prompts"]
         latents = batch["init_latents"]
         images = batch["images"]
+        frame_ids = batch["frame_ids"]
 
         pipe_kwargs = dict(
             num_inference_steps=self.num_inference_steps,
@@ -402,7 +495,7 @@ class BYOPFlow(BaseFlow):
             pipe_kwargs.update({"width": self.width})
 
         if "strength" in self.pipe_signature:
-            pipe_kwargs.update({"strength": self.strength})
+            pipe_kwargs.update({"strength": self.strength[frame_ids[0]]})
 
         if "latents" in self.pipe_signature:
             pipe_kwargs.update({"latents": latents})
@@ -412,29 +505,84 @@ class BYOPFlow(BaseFlow):
         elif "prompt" in self.pipe_signature and not self.use_prompt_embeds:
             pipe_kwargs.update({"prompt": prompts})
 
-        if "negative_prompts" in self.pipe_signature:
+        if "negative_prompt" in self.pipe_signature:
             pipe_kwargs.update(
-                {"negative_prompts": [self.negative_prompts] * len(prompts)}
+                {"negative_prompt": [self.negative_prompts] * len(prompts)}
             )
 
         if "image" in self.pipe_signature:
             if (self.video_input is not None) and (len(images) != 0):
-                pipe_kwargs.update({"image": images})
+                # preprocess the current batch of images
+                image_input = self.preprocessor(images)
+                pipe_kwargs.update({"image": image_input})
 
             elif self.image_input is not None:
-                pipe_kwargs.update({"image": [self.image_input] * len(prompts)})
+                pipe_kwargs.update({"image": self.image_input})
 
         if "generator" in self.pipe_signature:
             pipe_kwargs.update({"generator": self.generator})
 
-        pipe_kwargs.update(self.additional_pipeline_argumenets)
+        pipe_kwargs.update(self.additional_pipeline_arguments)
 
         return pipe_kwargs
 
+    def get_reference_image(self, image_input):
+        if self.reference_image is None:
+            self.reference_image = image_input
+
+        return self.reference_image
+
+    def apply_color_matching(self, image_input):
+        # Color match the transformed image to the reference
+        reference_image = self.get_reference_image(image_input[0])
+        image_input = [
+            apply_lab_color_matching(image, reference_image) for image in image_input
+        ]
+
+        return image_input
+
     @torch.no_grad()
-    def apply_animation(self, image, idx):
-        image_input = self.animation_callback(image, idx)
-        self.image_input = ToPILImage(mode="RGB")(image_input[0])
+    def apply_motion(self, image, idx):
+        image = image[0]
+        image = image.convert("RGB")
+        image_input = self.motion_callback(image, idx)
+
+        return image_input
+
+    def apply_coherence(self, latents, batch):
+        frame_id = batch["frame_ids"][0]
+
+        if self.coherence_callback.init_latent is None:
+            self.coherence_callback.init_latent = latents
+
+        latents = self.coherence_callback(latents)
+        noise = self.noise_schedule[frame_id] * torch.randn(latents.shape).to(
+            latents.device
+        )
+        latents = latents + noise
+        return latents
+
+    def run_inference(self, batch):
+        pipe_kwargs = self.prepare_inputs(batch)
+        if self.use_coherence:
+            output = self.pipe(**pipe_kwargs, output_type="latent")
+
+            if isinstance(output, np.ndarray):
+                latents = ToTensor()(output)
+            else:
+                latents = output.images
+
+            latents = self.apply_coherence(latents, batch)
+
+            with torch.no_grad():
+                image = self.pipe.decode_latents(latents)
+                image = self.postprocess(image, output_type="pil")
+
+            return ImagePipelineOutput(images=image)
+
+        else:
+            output = self.pipe(**pipe_kwargs)
+            return output
 
     def create(self, frames=None):
         batchgen = self.batch_generator(
@@ -442,12 +590,18 @@ class BYOPFlow(BaseFlow):
         )
 
         for batch_idx, batch in enumerate(batchgen):
-            pipe_kwargs = self.prepare_inputs(batch)
-            with torch.autocast("cuda"):
-                output = self.pipe(**pipe_kwargs)
+            output = self.run_inference(batch)
+            images = output.images
 
-            if self.animate:
-                image = output.images[0]
-                self.apply_animation(image, batch_idx)
+            if self.use_color_matching_only:
+                images = self.apply_color_matching(images)
+                output.images = images
 
-            yield output
+            yield output, batch["frame_ids"]
+
+            if self.use_motion:
+                images = self.apply_motion(images, batch)
+                if self.use_color_matching:
+                    images = self.apply_color_matching(images)
+
+                self.image_input = self.preprocessor(images)
