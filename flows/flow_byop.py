@@ -505,9 +505,9 @@ class BYOPFlow(BaseFlow):
         elif "prompt" in self.pipe_signature and not self.use_prompt_embeds:
             pipe_kwargs.update({"prompt": prompts})
 
-        if "negative_prompts" in self.pipe_signature:
+        if "negative_prompt" in self.pipe_signature:
             pipe_kwargs.update(
-                {"negative_prompts": [self.negative_prompts] * len(prompts)}
+                {"negative_prompt": [self.negative_prompts] * len(prompts)}
             )
 
         if "image" in self.pipe_signature:
