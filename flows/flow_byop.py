@@ -11,15 +11,9 @@ from PIL import Image
 from torchvision.transforms import ToPILImage, ToTensor
 
 from preprocessor import Preprocessor
-from utils import (
-    apply_lab_color_matching,
-    apply_transformation2D,
-    curve_from_cn_string,
-    get_mel_reduce_func,
-    load_video_frames,
-    parse_key_frames,
-    slerp,
-)
+from utils import (apply_lab_color_matching, apply_transformation2D,
+                   curve_from_cn_string, get_mel_reduce_func,
+                   load_video_frames, parse_key_frames, slerp)
 
 from .flow_base import BaseFlow
 
@@ -575,6 +569,7 @@ class BYOPFlow(BaseFlow):
             latents = self.apply_coherence(latents, batch)
 
             with torch.no_grad():
+                latents = latents.to(self.pipe.vae.dtype)
                 image = self.pipe.decode_latents(latents)
                 image = self.postprocess(image, output_type="pil")
 
