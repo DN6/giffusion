@@ -502,6 +502,10 @@ class BYOPFlow(BaseFlow):
 
         if "prompt_embeds" in self.pipe_signature and self.use_prompt_embeds:
             pipe_kwargs.update({"prompt_embeds": prompts})
+            if "pooled_prompt_embeds" in self.pipe_signature and self.use_prompt_embeds:
+                pooled_prompt_embeds = list(map(lambda x: x[0], prompts))
+                pipe_kwargs.update({"pooled_prompt_embeds": pooled_prompt_embeds})
+
         elif "prompt" in self.pipe_signature and not self.use_prompt_embeds:
             pipe_kwargs.update({"prompt": prompts})
 
