@@ -9,6 +9,30 @@ Giffusion is a Web UI for generating GIFs and Videos using Stable Diffusion.
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/DN6/giffusion/blob/main/Giffusion.ipynb)
 [![Open In Comet](https://custom-icon-badges.herokuapp.com/badge/comet__ml-Open_In_Comet-orange?logo=logo_comet_ml)](https://www.comet.com/team-comet-ml/giffusion/view/CzxqbNrydKqHCaYhNEnbyrpnz/panels?utm_source=tds&utm_medium=social&utm_campaign=stable_diffusion)
 
+## To Run
+
+### In Colab
+Open the Colab Notebook linked above and follow the instructions to start the Giffusion UI
+
+### On your local machine
+
+Clone the Giffusion repository
+```
+git clone https://github.com/DN6/giffusion.git && cd giffusion
+```
+
+Install the requirements
+
+```
+pip install -r requirements.txt
+```
+
+Start the application
+
+```
+python app.py
+```
+
 ## Features
 
 ### Bring Your Own Pipeline
