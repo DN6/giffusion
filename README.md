@@ -39,10 +39,6 @@ python app.py
 
 Giffusion supports using any pipeline and compatible checkpoint from the [Diffusers](https://huggingface.co/docs/diffusers/index) library. Simply paste in the checkpoint name and pipeline name in the `Pipeline Settings`
 
-<p align="center">
-  <img width="341" alt="Screenshot 2023-07-26 at 11 41 11 PM" src="https://user-images.githubusercontent.com/7529846/256370591-6a824ddb-59dd-4917-98b7-7fedbafaa62d.png">
-</p>
-
 #### ControlNet Support
 
 Giffusion allows you to use the `StableDiffusionControlNetPipeline`. Simply paste in the ControlNet checkpoint you would like to use to load in the Pipeline.
@@ -58,6 +54,10 @@ lllyasviel/control_v11p_sd15_softedge, lllyasviel/control_v11f1p_sd15_depth
 <p align="center">
   <img width="341" alt="Screenshot 2023-07-26 at 11 41 11 PM" src="https://user-images.githubusercontent.com/7529846/256476148-fc0dc1ad-ed26-435c-9850-8c9cb7f9a789.png">
 </p>
+
+#### Custom Pipeline Support
+
+You can use your own custom pipelines with Giffusion as well. Simply paste in the path to your Pipeline file in the `Custom Pipeline` section. The Pipeline file must follow a format similar to the [community pipelines found in Diffusers](https://github.com/huggingface/diffusers/tree/main/examples/community)
 
 
 ### Multiframe Generation
