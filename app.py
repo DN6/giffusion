@@ -29,7 +29,7 @@ CONTROLNET_PROCESSORS = ["no-processing"] + list(CONTROLNET_PROCESSORS.keys())
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 
 
-def load_pipeline(model_name, pipeline_name, controlnet, pipe):
+def load_pipeline(model_name, pipeline_name, controlnet, custom_pipeline, pipe):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     try:
@@ -41,6 +41,8 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
         success_message = (
             f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
         )
+        pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
+
         if controlnet:
             from diffusers import ControlNetModel
 
@@ -52,25 +54,24 @@ def load_pipeline(model_name, pipeline_name, controlnet, pipe):
                 for controlnet in controlnets
             ]
 
-            pipeline_name = "StableDiffusionControlNetPipeline"
-            pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
             pipe = pipe_cls.from_pretrained(
                 model_name,
                 torch_dtype=torch.float16,
                 safety_checker=None,
                 controlnet=controlnet_models,
                 cache_dir=MODEL_PATH,
+                custom_pipeline=custom_pipeline if custom_pipeline else None,
             )
             success_message = f"Successfully loaded Pipeline: {pipeline_name} with {model_name} and {controlnets}"
 
         else:
-            pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
             pipe = pipe_cls.from_pretrained(
                 model_name,
                 use_auth_token=True,
                 torch_dtype=torch.float16,
                 safety_checker=None,
                 cache_dir=MODEL_PATH,
+                custom_pipeline=custom_pipeline if custom_pipeline else None,
             )
 
         if hasattr(pipe, "enable_model_cpu_offload"):
@@ -231,6 +232,7 @@ with demo:
                             label="Pipeline Name", value="DiffusionPipeline"
                         )
                         controlnet = gr.Textbox(label="ControlNet Checkpoint")
+                        custom_pipeline = gr.Textbox(label="Custom Pipeline")
                     with gr.Column():
                         with gr.Row():
                             load_pipeline_btn = gr.Button(value="Load Pipeline")
@@ -434,7 +436,7 @@ with demo:
 
     load_pipeline_btn.click(
         load_pipeline,
-        [model_name, pipeline_name, controlnet, pipe],
+        [model_name, pipeline_name, controlnet, custom_pipeline, pipe],
         [pipe, load_message],
     )
 
