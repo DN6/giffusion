@@ -47,12 +47,19 @@ def load_pipeline(model_name, pipeline_name, controlnet, custom_pipeline, pipe):
             from diffusers import ControlNetModel
 
             controlnets = [controlnet.strip() for controlnet in controlnet.split(",")]
-            controlnet_models = [
-                ControlNetModel.from_pretrained(
-                    controlnet, torch_dtype=torch.float16, cache_dir=MODEL_PATH
+
+            # temporary solution to multicontrolnet issue in sdxl
+            if len(controlnets) == 1:
+                controlnet_models = ControlNetModel.from_pretrained(
+                    controlnets[0], torch_dtype=torch.float16, cache_dir=MODEL_PATH
                 )
-                for controlnet in controlnets
-            ]
+            else:
+                controlnet_models = [
+                    ControlNetModel.from_pretrained(
+                        controlnet, torch_dtype=torch.float16, cache_dir=MODEL_PATH
+                    )
+                    for controlnet in controlnets
+                ]
 
             pipe = pipe_cls.from_pretrained(
                 model_name,
