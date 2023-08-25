@@ -264,7 +264,7 @@ with demo:
                 with gr.Tab("Diffusion"):
                     use_fixed_latent = gr.Checkbox(label="Use Fixed Init Latent")
                     use_prompt_embeds = gr.Checkbox(
-                        label="Use Prompt Embeds", value=True, interactive=True
+                        label="Use Prompt Embeds", value=False, interactive=True
                     )
                     seed = gr.Number(value=42, label="Numerical Seed")
                     batch_size = gr.Slider(1, 64, step=1, value=1, label="Batch Size")
