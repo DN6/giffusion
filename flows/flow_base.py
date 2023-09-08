@@ -99,7 +99,7 @@ class BaseFlow:
         )
         text_inputs = text_inputs.input_ids.to(self.pipe.text_encoder.device)
         text_embeddings = self.pipe.text_encoder(text_inputs)[0]
-        text_embeddings = text_embeddings.dtype(self.pipe.unet.dtype)
+        text_embeddings = text_embeddings.to(self.pipe.unet.dtype)
 
         return text_embeddings
 
