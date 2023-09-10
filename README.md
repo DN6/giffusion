@@ -287,7 +287,7 @@ reference_latent = (coherence_alpha * latents) + (
 
 1. **Coherence Scale:** Increasing this value will make the current frame look more like the reference frame
 2. **Coherence Alpha:** Controls how much to blend the current frame's latent code with the reference frame's latent code. Increasing the value will weigh more recent frames when computing the gradient.
-3. **Coherence Steps:** Number of gradient update steps made to the current latent code in order to match the reference latent code.
+3. **Coherence Steps:** How often to apply the callback during the diffusion process. e.g. Setting this to 2, will run the callback on every 2nd step in the diffusion process.
 4. **Noise Schedule:** Amount of noise to add to a latent code for diffusion diversity. Higher values lead to more diversity. Noise is only applied if Coherence is greater than 0.0
 5. **Apply Color Matching:** Apply LAB histogram color matching to the current frame using the first generated frame as a reference. This can help reduce dramatic changes in color across images during the generation process.
 
