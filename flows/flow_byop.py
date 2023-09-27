@@ -6,14 +6,19 @@ import librosa
 import numpy as np
 import pandas as pd
 import torch
-from diffusers import ImagePipelineOutput
 from PIL import Image
 from torchvision.transforms import ToPILImage, ToTensor
 
 from preprocessor import Preprocessor
-from utils import (apply_lab_color_matching, apply_transformation2D,
-                   curve_from_cn_string, get_mel_reduce_func,
-                   load_video_frames, parse_key_frames, slerp)
+from utils import (
+    apply_lab_color_matching,
+    apply_transformation2D,
+    curve_from_cn_string,
+    get_mel_reduce_func,
+    load_video_frames,
+    parse_key_frames,
+    slerp,
+)
 
 from .flow_base import BaseFlow
 
@@ -53,32 +58,36 @@ class MotionCallback:
 
 class CoherenceCallback:
     def __init__(
-        self, init_latent=None, coherence_scale=300, coherence_alpha=0.0, steps=5
+        self,
+        init_latent=None,
+        coherence_scale=300,
+        coherence_alpha=0.0,
+        steps=1,
+        noise_level=0.001,
     ):
         self.init_latent = init_latent
         self.coherence_scale = coherence_scale
         self.coherence_alpha = coherence_alpha
+        self.noise_level = noise_level
         self.steps = steps
 
-    def apply_coherence_guidance(self, latents):
-        for step in range(self.steps):
+    def apply(self, i, t, latents):
+        if self.init_latent is None:
+            self.init_latent = latents
+
+        latents.requires_grad = True
+
+        with torch.enable_grad():
             loss = (latents - self.init_latent).pow(2).mean()
             cond_grad = torch.autograd.grad(loss, latents)[0]
 
-            latents = latents - (self.coherence_scale * cond_grad)
-
-        return latents.detach()
-
-    def __call__(self, latents):
-        latents.requires_grad = True
-        with torch.enable_grad():
-            latents = self.apply_coherence_guidance(latents)
+        latents = latents.detach()
+        latents.add_(-self.coherence_scale * cond_grad)
+        latents.add_(self.noise_level * torch.randn(latents.shape).to(latents.device))
 
         self.init_latent = (self.coherence_alpha * latents) + (
             1.0 - self.coherence_alpha
         ) * self.init_latent
-
-        return latents
 
 
 class BYOPFlow(BaseFlow):
@@ -543,41 +552,22 @@ class BYOPFlow(BaseFlow):
 
         return image_input
 
-    def apply_coherence(self, latents, batch):
-        frame_id = batch["frame_ids"][0]
-
-        if self.coherence_callback.init_latent is None:
-            self.coherence_callback.init_latent = latents
-
-        latents = self.coherence_callback(latents)
-        noise = self.noise_schedule[frame_id] * torch.randn(latents.shape).to(
-            latents.device
-        )
-        latents = latents + noise
-        return latents
-
     def run_inference(self, batch):
         pipe_kwargs = self.prepare_inputs(batch)
+
+        frame_id = batch["frame_ids"][0]
+
         if self.use_coherence:
-            output = self.pipe(**pipe_kwargs, output_type="latent")
+            noise_level = self.noise_schedule[frame_id]
+            self.coherence_callback.noise_level = noise_level
 
-            if isinstance(output, np.ndarray):
-                latents = ToTensor()(output)
-            else:
-                latents = output.images
+        output = self.pipe(
+            **pipe_kwargs,
+            callback=self.coherence_callback.apply if self.use_coherence else None,
+            callback_steps=self.coherence_callback.steps if self.use_coherence else 1,
+        )
 
-            latents = self.apply_coherence(latents, batch)
-
-            with torch.no_grad():
-                latents = latents.to(self.pipe.vae.dtype)
-                image = self.pipe.decode_latents(latents)
-                image = self.postprocess(image, output_type="pil")
-
-            return ImagePipelineOutput(images=image)
-
-        else:
-            output = self.pipe(**pipe_kwargs)
-            return output
+        return output
 
     def create(self, frames=None):
         batchgen = self.batch_generator(
