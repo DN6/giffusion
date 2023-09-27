@@ -6,7 +6,6 @@ import librosa
 import numpy as np
 import pandas as pd
 import torch
-from diffusers import ImagePipelineOutput
 from PIL import Image
 from torchvision.transforms import ToPILImage, ToTensor
 
@@ -553,19 +552,6 @@ class BYOPFlow(BaseFlow):
 
         return image_input
 
-    def apply_coherence(self, latents, batch):
-        frame_id = batch["frame_ids"][0]
-
-        if self.coherence_callback.init_latent is None:
-            self.coherence_callback.init_latent = latents
-
-        latents = self.coherence_callback(latents)
-        noise = self.noise_schedule[frame_id] * torch.randn(latents.shape).to(
-            latents.device
-        )
-        latents = latents + noise
-        return latents
-
     def run_inference(self, batch):
         pipe_kwargs = self.prepare_inputs(batch)
 
@@ -573,15 +559,14 @@ class BYOPFlow(BaseFlow):
 
         if self.use_coherence:
             noise_level = self.noise_schedule[frame_id]
-            self.coherence.noise_level = noise_level
+            self.coherence_callback.noise_level = noise_level
 
         output = self.pipe(
             **pipe_kwargs,
-            callback=self.coherence.apply if self.use_coherence else None,
-            callback_steps=self.coherence.steps if self.use_coherence else 1,
+            callback=self.coherence_callback.apply if self.use_coherence else None,
+            callback_steps=self.coherence_callback.steps if self.use_coherence else 1,
         )
 
-        output = self.pipe(**pipe_kwargs)
         return output
 
     def create(self, frames=None):

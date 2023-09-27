@@ -348,7 +348,7 @@ with demo:
 
                 with gr.Tab("Coherence"):
                     coherence_scale = gr.Slider(
-                        0, 10000, step=50, value=0, label="Coherence Scale"
+                        0, 100000, step=50, value=0, label="Coherence Scale"
                     )
                     coherence_alpha = gr.Slider(
                         0, 1.0, step=0.1, value=1.0, label="Coherence Alpha"
