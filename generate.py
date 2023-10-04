@@ -30,8 +30,6 @@ logger = logging.getLogger(__name__)
 # Disable denoising progress bar
 disable_progress_bar()
 
-OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
-
 
 def load_scheduler(scheduler, **kwargs):
     scheduler_map = dict(
@@ -51,6 +49,8 @@ def load_scheduler(scheduler, **kwargs):
 
 
 def run(
+    run_path,
+    run_image_save_path,
     pipe,
     text_prompt_inputs,
     negative_prompt_inputs,
@@ -77,6 +77,7 @@ def run(
     output_format="mp4",
     model_name="runwayml/stable-diffusion-v1-5",
     controlnet_name=None,
+    lora_name=None,
     additional_pipeline_arguments="{}",
     interpolation_type="linear",
     interpolation_args="",
@@ -88,6 +89,7 @@ def run(
     coherence_scale=300,
     coherence_alpha=1.0,
     coherence_steps=3,
+    noise_schedule=None,
     use_color_matching=False,
     preprocess=None,
 ):
@@ -97,47 +99,66 @@ def run(
         )
 
     experiment = start_experiment()
-
-    run_name = datetime.today().strftime("%Y-%m-%d-%H:%M:%S")
-    run_path = os.path.join(OUTPUT_BASE_PATH, run_name)
-    run_image_save_path = os.path.join(run_path, "imgs")
-    os.makedirs(run_image_save_path, exist_ok=True)
-
+    timestamp = datetime.today().strftime("%Y-%m-%d-%H:%M:%S")
     device = pipe.device
 
     parameters = {
-        "text_prompt_inputs": text_prompt_inputs,
-        "negative_prompt_inputs": negative_prompt_inputs,
-        "num_inference_steps": num_inference_steps,
-        "guidance_scale": guidance_scale,
-        "batch_size": batch_size,
-        "scheduler": scheduler,
-        "use_default_scheduler": use_default_scheduler,
-        "num_latent_channels": num_latent_channels,
-        "seed": seed,
-        "fps": fps,
-        "use_fixed_latent": use_fixed_latent,
-        "use_prompt_embeds": use_prompt_embeds,
-        "audio_component": audio_component,
-        "mel_spectogram_reduce": mel_spectogram_reduce,
-        "output_format": output_format,
-        "pipeline_name": pipe.__class__.__name__,
-        "model_name": model_name,
-        "controlnet_name": controlnet_name,
-        "scheduler_kwargs": scheduler_kwargs,
-        "additional_pipeline_arguments": additional_pipeline_arguments,
-        "interpolation_type": interpolation_type,
-        "interpolation_args": interpolation_args,
-        "zoom": zoom,
-        "translate_x": translate_x,
-        "translate_y": translate_y,
-        "angle": angle,
-        "padding_mode": padding_mode,
-        "coherence_scale": coherence_scale,
-        "coherence_alpha": coherence_alpha,
-        "coherence_steps": coherence_steps,
-        "use_color_matching": use_color_matching,
-        "preprocess": preprocess,
+        "prompts": {
+            "text_prompt_inputs": text_prompt_inputs,
+            "negative_prompt_inputs": negative_prompt_inputs,
+        },
+        "diffusion_settings": {
+            "num_inference_steps": num_inference_steps,
+            "guidance_scale": guidance_scale,
+            "strength": strength,
+            "batch_size": batch_size,
+            "seed": seed,
+            "use_fixed_latent": use_fixed_latent,
+            "use_prompt_embeds": use_prompt_embeds,
+            "strength": strength,
+            "scheduler": scheduler,
+            "use_default_scheduler": use_default_scheduler,
+            "scheduler_kwargs": scheduler_kwargs,
+        },
+        "preprocessing_settings": {
+            "preprocess": preprocess,
+        },
+        "pipeline_settings": {
+            "pipeline_name": pipe.__class__.__name__,
+            "model_name": model_name,
+            "controlnet_name": controlnet_name,
+            "lora_name": lora_name,
+            "additional_pipeline_arguments": additional_pipeline_arguments,
+        },
+        "animation_settings": {
+            "interpolation_type": interpolation_type,
+            "interpolation_args": interpolation_args,
+            "zoom": zoom,
+            "translate_x": translate_x,
+            "translate_y": translate_y,
+            "angle": angle,
+            "padding_mode": padding_mode,
+            "coherence_scale": coherence_scale,
+            "coherence_alpha": coherence_alpha,
+            "coherence_steps": coherence_steps,
+            "noise_schedule": noise_schedule,
+            "use_color_matching": use_color_matching,
+        },
+        "media": {
+            "audio_settings": {
+                "audio_component": audio_component,
+                "mel_spectogram_reduce": mel_spectogram_reduce,
+            },
+            "video_settings": {
+                "video_use_pil_format": video_use_pil_format,
+            },
+        },
+        "output_settings": {
+            "output_format": output_format,
+            "fps": fps,
+        },
+        "frame_information": {"last_frame_id": max_frames},
+        "timestamp": timestamp,
     }
     save_parameters(run_path, parameters)
 
@@ -197,6 +218,7 @@ def run(
         coherence_scale=coherence_scale,
         coherence_alpha=coherence_alpha,
         coherence_steps=coherence_steps,
+        noise_schedule=noise_schedule,
         use_color_matching=use_color_matching,
         preprocess=preprocess,
     )
@@ -232,7 +254,7 @@ def run(
     if experiment:
         experiment.log_asset(output_filename)
 
-    return output_filename
+    return output_filename, run_path
 
 
 if __name__ == "__main__":

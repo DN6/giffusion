@@ -6,15 +6,13 @@ import gradio as gr
 import torch
 from controlnet_aux.processor import MODELS as CONTROLNET_PROCESSORS
 from PIL import Image
+from wonderwords import RandomWord
 
 from generate import run
-from utils import (
-    ToPILImage,
-    get_audio_key_frame_information,
-    get_video_frame_information,
-    load_video_frames,
-    set_xformers,
-)
+from session import save_session
+from utils import (ToPILImage, get_audio_key_frame_information,
+                   get_video_frame_information, load_video_frames,
+                   set_xformers)
 
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "generated")
@@ -27,9 +25,10 @@ USE_XFORMERS = set_xformers()
 CONTROLNET_PROCESSORS = ["no-processing"] + list(CONTROLNET_PROCESSORS.keys())
 
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
+wordgen = RandomWord()
 
 
-def load_pipeline(model_name, pipeline_name, controlnet, custom_pipeline, pipe):
+def load_pipeline(model_name, pipeline_name, controlnet, lora, custom_pipeline, pipe):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     try:
@@ -80,6 +79,9 @@ def load_pipeline(model_name, pipeline_name, controlnet, custom_pipeline, pipe):
                 cache_dir=MODEL_PATH,
                 custom_pipeline=custom_pipeline if custom_pipeline else None,
             )
+
+        if lora:
+            pipe.load_lora_weights(lora)
 
         if hasattr(pipe, "enable_model_cpu_offload"):
             pipe.enable_model_cpu_offload()
@@ -175,10 +177,21 @@ def predict(
     coherence_scale,
     coherence_alpha,
     coherence_steps,
+    noise_schedule,
     use_color_matching,
     preprocessing_type,
+    run_path_state,
 ):
+    run_name = f"{wordgen.word(include_parts_of_speech=['adjectives'])}-{wordgen.word(include_parts_of_speech=['nouns'])}"
+    run_path = os.path.join(OUTPUT_BASE_PATH, run_name)
+    run_image_save_path = os.path.join(run_path, "imgs")
+    os.makedirs(run_image_save_path, exist_ok=True)
+
+    run_path_state.value = run_path
+
     output = run(
+        run_path,
+        run_image_save_path,
         pipe=pipe,
         text_prompt_inputs=text_prompt_input,
         negative_prompt_inputs=negative_prompt_input,
@@ -216,6 +229,7 @@ def predict(
         coherence_scale=coherence_scale,
         coherence_alpha=coherence_alpha,
         coherence_steps=int(coherence_steps),
+        noise_schedule=noise_schedule,
         use_color_matching=use_color_matching,
         preprocess=preprocessing_type,
     )
@@ -229,22 +243,36 @@ with demo:
     gr.Markdown("# GIFfusion 💥")
     with gr.Row():
         with gr.Column(scale=1):
-            with gr.Row():
-                with gr.Accordion("Pipeline Settings: Load Models and Pipelines"):
-                    with gr.Column():
-                        model_name = gr.Textbox(
-                            label="Model Name", value="runwayml/stable-diffusion-v1-5"
-                        )
-                        pipeline_name = gr.Textbox(
-                            label="Pipeline Name", value="DiffusionPipeline"
-                        )
-                        controlnet = gr.Textbox(label="ControlNet Checkpoint")
-                        custom_pipeline = gr.Textbox(label="Custom Pipeline")
-                    with gr.Column():
-                        with gr.Row():
-                            load_pipeline_btn = gr.Button(value="Load Pipeline")
-                        with gr.Row():
-                            load_message = gr.Markdown()
+            with gr.Accordion("Session Settings"):
+                with gr.Tab("Save"):
+                    autosave = gr.Checkbox(
+                        label="Autosave",
+                        value=os.getenv("GIFFUSION_AUTO_SAVE", True),
+                    )
+                    save_repo_id = gr.Textbox(label="Repo ID", value="giffusion")
+                    save_session_name = gr.Textbox(label="Session Name")
+                    save_session_btn = gr.Button(label="Save Session")
+
+                with gr.Tab("Load"):
+                    load_config_path = gr.Textbox()
+                    load_session_settings_btn = gr.Button()
+                    load_session_assets_btn = gr.tk.Button()
+
+            with gr.Accordion("Pipeline Settings: Load Models and Pipelines"):
+                with gr.Column():
+                    model_name = gr.Textbox(
+                        label="Model Name", value="runwayml/stable-diffusion-v1-5"
+                    )
+                    pipeline_name = gr.Textbox(
+                        label="Pipeline Name", value="DiffusionPipeline"
+                    )
+                    controlnet = gr.Textbox(label="ControlNet Checkpoint")
+                    custom_pipeline = gr.Textbox(label="Custom Pipeline")
+                with gr.Column():
+                    with gr.Row():
+                        load_pipeline_btn = gr.Button(value="Load Pipeline")
+                    with gr.Row():
+                        load_message = gr.Markdown()
 
             with gr.Accordion(
                 "Output Settings: Set output file format and FPS", open=False
@@ -375,7 +403,9 @@ with demo:
                     )
 
         with gr.Column(elem_id="output", scale=2):
-            output = gr.Video(label="Model Output", elem_id="output")
+            with gr.Row():
+                output = gr.Video(label="Model Output", elem_id="output")
+
             with gr.Row():
                 submit = gr.Button(
                     label="Submit",
@@ -440,6 +470,7 @@ with demo:
                 )
 
     pipe = gr.State()
+    run_path = gr.State()
 
     load_pipeline_btn.click(
         load_pipeline,
@@ -506,12 +537,15 @@ with demo:
             coherence_scale,
             coherence_alpha,
             coherence_steps,
+            noise_schedule,
             apply_color_matching,
             preprocessing_type,
         ],
-        outputs=output,
+        outputs=[output, run_path],
     )
     stop.click(fn=None, inputs=None, outputs=None, cancels=[submit_event])
+    save_session_btn.click(save_session, inputs=[run_path])
+
 
 if __name__ == "__main__":
     demo.queue(concurrency_count=2)
