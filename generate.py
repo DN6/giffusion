@@ -98,10 +98,65 @@ def run(
             "Pipline object has not been created. Please load a Pipline before submitting a run"
         )
 
-    experiment = start_experiment()
     timestamp = datetime.today().strftime("%Y-%m-%d-%H:%M:%S")
     device = pipe.device
 
+    if not use_default_scheduler:
+        scheduler_kwargs = json.loads(scheduler_kwargs)
+        if not scheduler_kwargs:
+            scheduler_kwargs = {
+                "beta_start": 0.00085,
+                "beta_end": 0.012,
+                "beta_schedule": "scaled_linear",
+            }
+
+        pipe.scheduler = load_scheduler(scheduler, **scheduler_kwargs)
+
+    motion_args = {
+        "zoom": zoom,
+        "translate_x": translate_x,
+        "translate_y": translate_y,
+        "angle": angle,
+    }
+
+    additional_pipeline_arguments = json.loads(additional_pipeline_arguments)
+
+    flow = BYOPFlow(
+        pipe=pipe,
+        text_prompts=text_prompt_inputs,
+        negative_prompts=negative_prompt_inputs,
+        guidance_scale=guidance_scale,
+        strength=strength,
+        num_inference_steps=num_inference_steps,
+        height=height,
+        width=width,
+        use_fixed_latent=use_fixed_latent,
+        use_prompt_embeds=use_prompt_embeds,
+        num_latent_channels=num_latent_channels,
+        device=device,
+        image_input=image_input,
+        audio_input=audio_input,
+        audio_component=audio_component,
+        audio_mel_spectogram_reduce=mel_spectogram_reduce,
+        video_input=video_input,
+        video_use_pil_format=video_use_pil_format,
+        seed=seed,
+        batch_size=batch_size,
+        fps=fps,
+        additional_pipeline_arguments=additional_pipeline_arguments,
+        interpolation_type=interpolation_type,
+        interpolation_args=interpolation_args,
+        motion_args=motion_args,
+        padding_mode=padding_mode,
+        coherence_scale=coherence_scale,
+        coherence_alpha=coherence_alpha,
+        coherence_steps=coherence_steps,
+        noise_schedule=noise_schedule,
+        use_color_matching=use_color_matching,
+        preprocess=preprocess,
+    )
+
+    max_frames = flow.max_frames
     parameters = {
         "prompts": {
             "text_prompt_inputs": text_prompt_inputs,
@@ -160,70 +215,10 @@ def run(
         "frame_information": {"last_frame_id": max_frames},
         "timestamp": timestamp,
     }
-    save_parameters(run_path, parameters)
-
     if (video_input is not None) or (image_input is not None):
         parameters.update({"strength": strength})
+    save_parameters(run_path, parameters)
 
-    if experiment:
-        experiment.log_parameters(parameters)
-
-    if not use_default_scheduler:
-        scheduler_kwargs = json.loads(scheduler_kwargs)
-        if not scheduler_kwargs:
-            scheduler_kwargs = {
-                "beta_start": 0.00085,
-                "beta_end": 0.012,
-                "beta_schedule": "scaled_linear",
-            }
-
-        pipe.scheduler = load_scheduler(scheduler, **scheduler_kwargs)
-
-    motion_args = {
-        "zoom": zoom,
-        "translate_x": translate_x,
-        "translate_y": translate_y,
-        "angle": angle,
-    }
-
-    additional_pipeline_arguments = json.loads(additional_pipeline_arguments)
-
-    flow = BYOPFlow(
-        pipe=pipe,
-        text_prompts=text_prompt_inputs,
-        negative_prompts=negative_prompt_inputs,
-        guidance_scale=guidance_scale,
-        strength=strength,
-        num_inference_steps=num_inference_steps,
-        height=height,
-        width=width,
-        use_fixed_latent=use_fixed_latent,
-        use_prompt_embeds=use_prompt_embeds,
-        num_latent_channels=num_latent_channels,
-        device=device,
-        image_input=image_input,
-        audio_input=audio_input,
-        audio_component=audio_component,
-        audio_mel_spectogram_reduce=mel_spectogram_reduce,
-        video_input=video_input,
-        video_use_pil_format=video_use_pil_format,
-        seed=seed,
-        batch_size=batch_size,
-        fps=fps,
-        additional_pipeline_arguments=additional_pipeline_arguments,
-        interpolation_type=interpolation_type,
-        interpolation_args=interpolation_args,
-        motion_args=motion_args,
-        padding_mode=padding_mode,
-        coherence_scale=coherence_scale,
-        coherence_alpha=coherence_alpha,
-        coherence_steps=coherence_steps,
-        noise_schedule=noise_schedule,
-        use_color_matching=use_color_matching,
-        preprocess=preprocess,
-    )
-
-    max_frames = flow.max_frames
     output_frames = []
 
     image_generator = flow.create()
@@ -234,9 +229,6 @@ def run(
             img_save_path = f"{run_image_save_path}/{frame_idx:04d}.png"
             image.save(img_save_path)
             output_frames.append(img_save_path)
-
-            if experiment:
-                experiment.log_image(img_save_path, image_name="frame", step=frame_idx)
 
     if output_format == "gif":
         output_filename = f"{run_path}/output.gif"
@@ -250,9 +242,6 @@ def run(
             fps=fps,
             audio_input=audio_input,
         )
-
-    if experiment:
-        experiment.log_asset(output_filename)
 
     return output_filename, run_path
 

@@ -10,10 +10,15 @@ from wonderwords import RandomWord
 
 from generate import run
 from session import save_session
-from utils import (ToPILImage, get_audio_key_frame_information,
-                   get_video_frame_information, load_video_frames,
-                   set_xformers)
+from utils import (
+    ToPILImage,
+    get_audio_key_frame_information,
+    get_video_frame_information,
+    load_video_frames,
+    set_xformers,
+)
 
+AUTOSAVE = os.getenv("GIFFUSION_AUTO_SAVE", True)
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "generated")
 MODEL_PATH = os.getenv("MODEL_PATH", "models")
@@ -139,6 +144,21 @@ def send_to_video_input(video):
     return video
 
 
+def create_run_path(run_name=None):
+    if run_name is None:
+        run_name = f"{wordgen.word(include_parts_of_speech=['adjectives'])}-{wordgen.word(include_parts_of_speech=['nouns'])}"
+
+    run_path = os.path.join(OUTPUT_BASE_PATH, run_name)
+    run_image_save_path = os.path.join(run_path, "imgs")
+    os.makedirs(run_image_save_path, exist_ok=True)
+
+    return run_path, run_image_save_path
+
+
+def _run(**kwargs):
+    yield run(**kwargs)
+
+
 def predict(
     pipe,
     text_prompt_input,
@@ -180,18 +200,12 @@ def predict(
     noise_schedule,
     use_color_matching,
     preprocessing_type,
-    run_path_state,
+    run_name,
 ):
-    run_name = f"{wordgen.word(include_parts_of_speech=['adjectives'])}-{wordgen.word(include_parts_of_speech=['nouns'])}"
-    run_path = os.path.join(OUTPUT_BASE_PATH, run_name)
-    run_image_save_path = os.path.join(run_path, "imgs")
-    os.makedirs(run_image_save_path, exist_ok=True)
-
-    run_path_state.value = run_path
-
-    output = run(
-        run_path,
-        run_image_save_path,
+    run_path, run_image_save_path = create_run_path(run_name)
+    output = _run(
+        run_path=run_path,
+        run_image_save_path=run_image_save_path,
         pipe=pipe,
         text_prompt_inputs=text_prompt_input,
         negative_prompt_inputs=negative_prompt_input,
@@ -234,7 +248,7 @@ def predict(
         preprocess=preprocessing_type,
     )
 
-    return output
+    return run_path, output
 
 
 demo = gr.Blocks()
@@ -247,16 +261,17 @@ with demo:
                 with gr.Tab("Save"):
                     autosave = gr.Checkbox(
                         label="Autosave",
-                        value=os.getenv("GIFFUSION_AUTO_SAVE", True),
+                        interactive=True,
+                        value=AUTOSAVE,
                     )
                     save_repo_id = gr.Textbox(label="Repo ID", value="giffusion")
                     save_session_name = gr.Textbox(label="Session Name")
-                    save_session_btn = gr.Button(label="Save Session")
+                    save_session_btn = gr.Button(value="Save Session")
 
                 with gr.Tab("Load"):
-                    load_config_path = gr.Textbox()
-                    load_session_settings_btn = gr.Button()
-                    load_session_assets_btn = gr.tk.Button()
+                    load_config_path = gr.Textbox(label="Load Config Path")
+                    load_session_settings_btn = gr.Button(value="Load Session Settings")
+                    load_session_assets_btn = gr.Button(value="Load Session Assets")
 
             with gr.Accordion("Pipeline Settings: Load Models and Pipelines"):
                 with gr.Column():
