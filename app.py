@@ -144,6 +144,11 @@ def send_to_video_input(video):
     return video
 
 
+def send_to_video_output(state):
+    video_output = next(state)
+    return video_output
+
+
 def create_run_path(run_name=None):
     if run_name is None:
         run_name = f"{wordgen.word(include_parts_of_speech=['adjectives'])}-{wordgen.word(include_parts_of_speech=['nouns'])}"
@@ -248,7 +253,7 @@ def predict(
         preprocess=preprocessing_type,
     )
 
-    return run_path, output
+    return output, run_path
 
 
 demo = gr.Blocks()
@@ -486,6 +491,7 @@ with demo:
 
     pipe = gr.State()
     run_path = gr.State()
+    output_state = gr.State()
 
     load_pipeline_btn.click(
         load_pipeline,
@@ -556,8 +562,14 @@ with demo:
             apply_color_matching,
             preprocessing_type,
         ],
-        outputs=[output, run_path],
+        outputs=[output_state, run_path],
     )
+    output_state.change(
+        send_to_video_output,
+        inputs=[output_state],
+        outputs=[output],
+    )
+
     stop.click(fn=None, inputs=None, outputs=None, cancels=[submit_event])
     save_session_btn.click(save_session, inputs=[run_path])
 

@@ -1,4 +1,4 @@
-from huggingface_hub import HfApi, HfHubHTTPError, create_repo
+from huggingface_hub import HfApi, create_repo
 
 api = HfApi()
 
@@ -6,7 +6,7 @@ api = HfApi()
 def save_session(path, repo_id):
     try:
         repo_url = create_repo(repo_id, private=True)
-    except HfHubHTTPError as e:
+    except Exception as e:
         repo_url = None
 
     api.upload_folder(
