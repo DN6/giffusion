@@ -217,33 +217,20 @@ def run(
     }
     if (video_input is not None) or (image_input is not None):
         parameters.update({"strength": strength})
+
     save_parameters(run_path, parameters)
 
-    output_frames = []
+    run_image_save_path = f"{run_path}/imgs"
+    os.makedirs(run_image_save_path, exist_ok=True)
 
     image_generator = flow.create()
-
     for output, frame_ids in tqdm(image_generator, total=max_frames // flow.batch_size):
         images = output.images
         for image, frame_idx in zip(images, frame_ids):
             img_save_path = f"{run_image_save_path}/{frame_idx:04d}.png"
             image.save(img_save_path)
-            output_frames.append(img_save_path)
 
-    if output_format == "gif":
-        output_filename = f"{run_path}/output.gif"
-        save_gif(frames=output_frames, filename=output_filename, fps=fps)
-
-    else:
-        output_filename = f"{run_path}/output.mp4"
-        save_video(
-            frames=output_frames,
-            filename=output_filename,
-            fps=fps,
-            audio_input=audio_input,
-        )
-
-    return output_filename, run_path
+            yield image, img_save_path
 
 
 if __name__ == "__main__":

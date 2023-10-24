@@ -1,6 +1,7 @@
 import importlib
 import os
 import pathlib
+import threading
 
 import gradio as gr
 import torch
@@ -15,6 +16,8 @@ from utils import (
     get_audio_key_frame_information,
     get_video_frame_information,
     load_video_frames,
+    save_gif,
+    save_video,
     set_xformers,
 )
 
@@ -154,17 +157,11 @@ def create_run_path(run_name=None):
         run_name = f"{wordgen.word(include_parts_of_speech=['adjectives'])}-{wordgen.word(include_parts_of_speech=['nouns'])}"
 
     run_path = os.path.join(OUTPUT_BASE_PATH, run_name)
-    run_image_save_path = os.path.join(run_path, "imgs")
-    os.makedirs(run_image_save_path, exist_ok=True)
-
-    return run_path, run_image_save_path
-
-
-def _run(**kwargs):
-    yield run(**kwargs)
+    return run_path
 
 
 def predict(
+    run_path,
     pipe,
     text_prompt_input,
     negative_prompt_input,
@@ -205,12 +202,9 @@ def predict(
     noise_schedule,
     use_color_matching,
     preprocessing_type,
-    run_name,
 ):
-    run_path, run_image_save_path = create_run_path(run_name)
-    output = _run(
+    imagegen = run(
         run_path=run_path,
-        run_image_save_path=run_image_save_path,
         pipe=pipe,
         text_prompt_inputs=text_prompt_input,
         negative_prompt_inputs=negative_prompt_input,
@@ -253,7 +247,10 @@ def predict(
         preprocess=preprocessing_type,
     )
 
-    return output, run_path
+    output_frames = []
+    for image, image_save_path in imagegen:
+        yield image
+        output_frames.append(image_save_path)
 
 
 demo = gr.Blocks()
@@ -262,13 +259,8 @@ with demo:
     gr.Markdown("# GIFfusion 💥")
     with gr.Row():
         with gr.Column(scale=1):
-            with gr.Accordion("Session Settings"):
+            with gr.Accordion("Session Settings", open=False):
                 with gr.Tab("Save"):
-                    autosave = gr.Checkbox(
-                        label="Autosave",
-                        interactive=True,
-                        value=AUTOSAVE,
-                    )
                     save_repo_id = gr.Textbox(label="Repo ID", value="giffusion")
                     save_session_name = gr.Textbox(label="Session Name")
                     save_session_btn = gr.Button(value="Save Session")
@@ -307,6 +299,8 @@ with demo:
                             fps = gr.Slider(
                                 10, 60, step=1, value=10, label="Output Frame Rate"
                             )
+                        with gr.Row():
+                            save_video_btn = gr.Button(value="Save Video")
 
             with gr.Accordion("Diffusion Settings", open=False):
                 with gr.Tab("Diffusion"):
@@ -424,7 +418,10 @@ with demo:
 
         with gr.Column(elem_id="output", scale=2):
             with gr.Row():
-                output = gr.Video(label="Model Output", elem_id="output")
+                with gr.Tab():
+                    preview = gr.Image(label="Current Generation")
+                with gr.Tab():
+                    output = gr.Image(label="Model Output", elem_id="output")
 
             with gr.Row():
                 submit = gr.Button(
@@ -491,7 +488,6 @@ with demo:
 
     pipe = gr.State()
     run_path = gr.State()
-    output_state = gr.State()
 
     load_pipeline_btn.click(
         load_pipeline,
@@ -518,9 +514,11 @@ with demo:
     send_to_image_input_btn.click(send_to_image_input, [output, frame_id], image_input)
     send_to_video_input_btn.click(send_to_video_input, [output], [video_input])
 
-    submit_event = submit.click(
+    submit_event = submit.click(create_run_path, save_session_name, run_path)
+    gen_event = submit_event.success(
         fn=predict,
         inputs=[
+            run_path,
             pipe,
             text_prompt_input,
             negative_prompt_input,
@@ -562,16 +560,11 @@ with demo:
             apply_color_matching,
             preprocessing_type,
         ],
-        outputs=[output_state, run_path],
-    )
-    output_state.change(
-        send_to_video_output,
-        inputs=[output_state],
-        outputs=[output],
+        outputs=[preview],
     )
 
-    stop.click(fn=None, inputs=None, outputs=None, cancels=[submit_event])
-    save_session_btn.click(save_session, inputs=[run_path])
+    stop.click(fn=None, inputs=None, outputs=None, cancels=[gen_event])
+    save_session_btn.click(save_session, inputs=[save_repo_id, run_path])
 
 
 if __name__ == "__main__":

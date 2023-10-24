@@ -3,7 +3,7 @@ from huggingface_hub import HfApi, create_repo
 api = HfApi()
 
 
-def save_session(path, repo_id):
+def save_session(repo_id, path):
     try:
         repo_url = create_repo(repo_id, private=True)
     except Exception as e:
