@@ -50,7 +50,6 @@ def load_scheduler(scheduler, **kwargs):
 
 def run(
     run_path,
-    run_image_save_path,
     pipe,
     text_prompt_inputs,
     negative_prompt_inputs,

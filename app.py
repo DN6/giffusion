@@ -1,7 +1,6 @@
 import importlib
 import os
 import pathlib
-import threading
 
 import gradio as gr
 import torch
@@ -152,12 +151,19 @@ def send_to_video_output(state):
     return video_output
 
 
-def create_run_path(run_name=None):
-    if run_name is None:
-        run_name = f"{wordgen.word(include_parts_of_speech=['adjectives'])}-{wordgen.word(include_parts_of_speech=['nouns'])}"
-
+def create_run_path():
+    run_name = f"{wordgen.word(include_parts_of_speech=['adjectives'])}-{wordgen.word(include_parts_of_speech=['nouns'])}"
     run_path = os.path.join(OUTPUT_BASE_PATH, run_name)
+    os.makedirs(run_path, exist_ok=True)
+
     return run_path
+
+
+def _save_session(org_id, repo_id, run_path, session_name):
+    save_session(org_id, repo_id, run_path, session_name)
+    name = session_name if session_name is not None else run_path.split("/")[-1]
+
+    return f"Successfully saved session to {org_id}/{repo_id}/{name}"
 
 
 def predict(
@@ -203,54 +209,57 @@ def predict(
     use_color_matching,
     preprocessing_type,
 ):
-    imagegen = run(
-        run_path=run_path,
-        pipe=pipe,
-        text_prompt_inputs=text_prompt_input,
-        negative_prompt_inputs=negative_prompt_input,
-        num_inference_steps=int(num_iteration_steps),
-        height=int(image_height),
-        width=int(image_width),
-        guidance_scale=guidance_scale,
-        strength=strength,
-        seed=int(seed),
-        batch_size=int(batch_size),
-        fps=int(fps),
-        use_default_scheduler=use_default_scheduler,
-        scheduler=scheduler,
-        scheduler_kwargs=scheduler_kwargs,
-        use_fixed_latent=use_fixed_latent,
-        use_prompt_embeds=use_prompt_embeds,
-        num_latent_channels=int(num_latent_channels),
-        audio_input=audio_input,
-        audio_component=audio_component,
-        mel_spectogram_reduce=mel_spectogram_reduce,
-        image_input=image_input,
-        video_input=video_input,
-        video_use_pil_format=video_use_pil_format,
-        output_format=output_format,
-        model_name=model_name,
-        controlnet_name=controlnet_name,
-        additional_pipeline_arguments=additional_pipeline_arguments,
-        interpolation_type=interpolation_type,
-        interpolation_args=interpolation_args,
-        zoom=zoom,
-        translate_x=translate_x,
-        translate_y=translate_y,
-        angle=angle,
-        padding_mode=padding_mode,
-        coherence_scale=coherence_scale,
-        coherence_alpha=coherence_alpha,
-        coherence_steps=int(coherence_steps),
-        noise_schedule=noise_schedule,
-        use_color_matching=use_color_matching,
-        preprocess=preprocessing_type,
-    )
+    try:
+        imagegen = run(
+            run_path=run_path,
+            pipe=pipe,
+            text_prompt_inputs=text_prompt_input,
+            negative_prompt_inputs=negative_prompt_input,
+            num_inference_steps=int(num_iteration_steps),
+            height=int(image_height),
+            width=int(image_width),
+            guidance_scale=guidance_scale,
+            strength=strength,
+            seed=int(seed),
+            batch_size=int(batch_size),
+            fps=int(fps),
+            use_default_scheduler=use_default_scheduler,
+            scheduler=scheduler,
+            scheduler_kwargs=scheduler_kwargs,
+            use_fixed_latent=use_fixed_latent,
+            use_prompt_embeds=use_prompt_embeds,
+            num_latent_channels=int(num_latent_channels),
+            audio_input=audio_input,
+            audio_component=audio_component,
+            mel_spectogram_reduce=mel_spectogram_reduce,
+            image_input=image_input,
+            video_input=video_input,
+            video_use_pil_format=video_use_pil_format,
+            output_format=output_format,
+            model_name=model_name,
+            controlnet_name=controlnet_name,
+            additional_pipeline_arguments=additional_pipeline_arguments,
+            interpolation_type=interpolation_type,
+            interpolation_args=interpolation_args,
+            zoom=zoom,
+            translate_x=translate_x,
+            translate_y=translate_y,
+            angle=angle,
+            padding_mode=padding_mode,
+            coherence_scale=coherence_scale,
+            coherence_alpha=coherence_alpha,
+            coherence_steps=int(coherence_steps),
+            noise_schedule=noise_schedule,
+            use_color_matching=use_color_matching,
+            preprocess=preprocessing_type,
+        )
 
-    output_frames = []
-    for image, image_save_path in imagegen:
-        yield image
-        output_frames.append(image_save_path)
+        output_frames = []
+        for image, image_save_path in imagegen:
+            yield image
+            output_frames.append(image_save_path)
+    except Exception as e:
+        raise gr.Error(e)
 
 
 demo = gr.Blocks()
@@ -261,9 +270,11 @@ with demo:
         with gr.Column(scale=1):
             with gr.Accordion("Session Settings", open=False):
                 with gr.Tab("Save"):
+                    save_org_id = gr.Textbox(label="Org ID")
                     save_repo_id = gr.Textbox(label="Repo ID", value="giffusion")
                     save_session_name = gr.Textbox(label="Session Name")
                     save_session_btn = gr.Button(value="Save Session")
+                    save_session_status = gr.Markdown()
 
                 with gr.Tab("Load"):
                     load_config_path = gr.Textbox(label="Load Config Path")
@@ -418,9 +429,9 @@ with demo:
 
         with gr.Column(elem_id="output", scale=2):
             with gr.Row():
-                with gr.Tab():
+                with gr.Tab("Preview"):
                     preview = gr.Image(label="Current Generation")
-                with gr.Tab():
+                with gr.Tab("Video Output"):
                     output = gr.Image(label="Model Output", elem_id="output")
 
             with gr.Row():
@@ -514,7 +525,7 @@ with demo:
     send_to_image_input_btn.click(send_to_image_input, [output, frame_id], image_input)
     send_to_video_input_btn.click(send_to_video_input, [output], [video_input])
 
-    submit_event = submit.click(create_run_path, save_session_name, run_path)
+    submit_event = submit.click(create_run_path, outputs=[run_path])
     gen_event = submit_event.success(
         fn=predict,
         inputs=[
@@ -564,7 +575,11 @@ with demo:
     )
 
     stop.click(fn=None, inputs=None, outputs=None, cancels=[gen_event])
-    save_session_btn.click(save_session, inputs=[save_repo_id, run_path])
+    save_session_btn.click(
+        save_session,
+        inputs=[save_org_id, save_repo_id, run_path, save_session_name],
+        outputs=[save_session_status],
+    )
 
 
 if __name__ == "__main__":
