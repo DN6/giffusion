@@ -1,7 +1,6 @@
 import importlib
 import os
 import pathlib
-from math import e
 
 import gradio as gr
 import torch
@@ -23,7 +22,7 @@ from utils import (
 
 AUTOSAVE = os.getenv("GIFFUSION_AUTO_SAVE", True)
 ORG_ID = os.getenv("ORG_ID", None)
-REPO_ID = os.getenv("REPO_ID", None)
+REPO_ID = os.getenv("REPO_ID", "giffusion")
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "generated")
 MODEL_PATH = os.getenv("MODEL_PATH", "models")
@@ -38,7 +37,9 @@ prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 wordgen = RandomWord()
 
 
-def load_pipeline(model_name, pipeline_name, controlnet, lora, custom_pipeline, pipe):
+def load_pipeline(
+    model_name, pipeline_name, controlnet, adapter, lora, custom_pipeline, pipe
+):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     try:
@@ -51,6 +52,9 @@ def load_pipeline(model_name, pipeline_name, controlnet, lora, custom_pipeline, 
             f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
         )
         pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
+
+        if controlnet and adapter:
+            raise gr.Error("Cannot load both ControlNet and T2IAdapter")
 
         if controlnet:
             from diffusers import ControlNetModel
@@ -79,6 +83,33 @@ def load_pipeline(model_name, pipeline_name, controlnet, lora, custom_pipeline, 
                 custom_pipeline=custom_pipeline if custom_pipeline else None,
             )
             success_message = f"Successfully loaded Pipeline: {pipeline_name} with {model_name} and {controlnets}"
+
+        elif adapter:
+            from diffusers import T2IAdapter
+
+            adapters = [adapter.strip() for adapter in adapter.split(",")]
+
+            if len(adapters) == 1:
+                adapter_models = T2IAdapter.from_pretrained(
+                    adapters[0], torch_dtype=torch.float16, cache_dir=MODEL_PATH
+                )
+            else:
+                adapter_models = [
+                    T2IAdapter.from_pretrained(
+                        adapter, torch_dtype=torch.float16, cache_dir=MODEL_PATH
+                    )
+                    for adapter in adapters
+                ]
+
+            pipe = pipe_cls.from_pretrained(
+                model_name,
+                torch_dtype=torch.float16,
+                safety_checker=None,
+                adapter=adapter_models,
+                cache_dir=MODEL_PATH,
+                custom_pipeline=custom_pipeline if custom_pipeline else None,
+            )
+            success_message = f"Successfully loaded Pipeline: {pipeline_name} with {model_name} and {adapters}"
 
         else:
             pipe = pipe_cls.from_pretrained(
@@ -169,28 +200,6 @@ def _save_session(org_id, repo_id, run_path, session_name):
     return f"Successfully saved session to {org_id}/{repo_id}/{name}"
 
 
-def _load_session(
-    org_id,
-    repo_id,
-    session_name,
-    settings_filter,
-    components,
-):
-    components_map = {c.elem_id: c for c in components}
-    config = load_session(org_id, repo_id, session_name)
-    if settings_filter:
-        output = {k: config[k] for k in settings_filter}
-        config = output
-
-    for module_key, module_values in config.items():
-        if module_key == "timestamp":
-            continue
-
-        for component_key, component_value in module_values.items():
-            component = components_map[component_key]
-            component.value = component_value
-
-
 def predict(
     run_path,
     pipe,
@@ -219,6 +228,8 @@ def predict(
     output_format,
     model_name,
     controlnet_name,
+    adapter_name,
+    lora_name,
     additional_pipeline_arguments,
     interpolation_type,
     interpolation_args,
@@ -235,7 +246,7 @@ def predict(
     preprocessing_type,
 ):
     try:
-        imagegen = run(
+        image_generator = run(
             run_path=run_path,
             pipe=pipe,
             text_prompt_inputs=text_prompt_input,
@@ -263,6 +274,8 @@ def predict(
             output_format=output_format,
             model_name=model_name,
             controlnet_name=controlnet_name,
+            adapter_name=adapter_name,
+            lora_name=lora_name,
             additional_pipeline_arguments=additional_pipeline_arguments,
             interpolation_type=interpolation_type,
             interpolation_args=interpolation_args,
@@ -280,7 +293,7 @@ def predict(
         )
 
         output_frames = []
-        for image, image_save_path in imagegen:
+        for image, image_save_path in image_generator:
             yield image
             output_frames.append(image_save_path)
     except Exception as e:
@@ -296,16 +309,15 @@ with demo:
             with gr.Accordion("Session Settings", open=False):
                 with gr.Tab("Save"):
                     save_org_id = gr.Textbox(label="Org ID", value=ORG_ID)
-                    save_repo_id = gr.Textbox(label="Repo ID", value="giffusion")
+                    save_repo_id = gr.Textbox(label="Repo ID", value=REPO_ID)
                     save_session_name = gr.Textbox(label="Session Name")
                     save_session_btn = gr.Button(value="Save Session")
                     save_session_status = gr.Markdown()
 
                 with gr.Tab("Load"):
-                    load_org_id = gr.Textbox(label="Load Config Path", value=ORG_ID)
-                    load_repo_id = gr.Textbox(label="Load Repo ID", value=REPO_ID)
+                    load_org_id = gr.Textbox(label="Org ID", value=ORG_ID)
+                    load_repo_id = gr.Textbox(label="Repo ID", value=REPO_ID)
                     load_session_name = gr.Textbox(label="Session Name")
-                    load_session_settings_btn = gr.Button(value="Load Session Settings")
                     load_session_settings_filter = gr.Dropdown(
                         [
                             "prompts",
@@ -314,10 +326,11 @@ with demo:
                             "preprocessing_settings",
                             "pipeline_settings",
                             "animation_settings",
-                            "media",
                         ],
+                        label="Filter Settings",
                         multiselect=True,
                     )
+                    load_session_settings_btn = gr.Button(value="Load Session Settings")
 
             with gr.Accordion("Pipeline Settings: Load Models and Pipelines"):
                 with gr.Column():
@@ -327,8 +340,15 @@ with demo:
                     pipeline_name = gr.Textbox(
                         label="Pipeline Name", value="DiffusionPipeline"
                     )
-                    controlnet = gr.Textbox(label="ControlNet Checkpoint")
+                    lora = gr.Textbox(label="LoRA Checkpoint")
+
+                    with gr.Tab("ControlNet"):
+                        controlnet = gr.Textbox(label="ControlNet Checkpoint")
+                    with gr.Tab("T2I Adapters"):
+                        adapter = gr.Textbox(label="T2I Adapter Checkpoint")
+
                     custom_pipeline = gr.Textbox(label="Custom Pipeline")
+
                 with gr.Column():
                     with gr.Row():
                         load_pipeline_btn = gr.Button(value="Load Pipeline")
@@ -502,7 +522,7 @@ with demo:
                         label="Apply Color Matching",
                         value=False,
                         interactive=True,
-                        elem_id="apply_color_matching",
+                        elem_id="use_color_matching",
                     )
 
             with gr.Accordion("Inspiration Settings", open=False):
@@ -596,7 +616,7 @@ with demo:
 
     load_pipeline_btn.click(
         load_pipeline,
-        [model_name, pipeline_name, controlnet, custom_pipeline, pipe],
+        [model_name, pipeline_name, controlnet, adapter, lora, custom_pipeline, pipe],
         [pipe, load_message],
     )
 
@@ -650,6 +670,8 @@ with demo:
             output_format,
             model_name,
             controlnet,
+            adapter,
+            lora,
             additional_pipeline_arguments,
             interpolation_type,
             interpolation_args,
@@ -674,6 +696,99 @@ with demo:
         inputs=[save_org_id, save_repo_id, run_path, save_session_name],
         outputs=[save_session_status],
     )
+
+    def _load_session(org_id, repo_id, session_name, settings_filter):
+        config = load_session(org_id, repo_id, session_name)
+        if settings_filter:
+            output = {k: config[k] for k in settings_filter}
+            config = output
+
+        output = {}
+        for module_key, module_value in config.items():
+            if module_key == "pipeline_settings":
+                output.update(
+                    {
+                        model_name: config["pipeline_settings"]["model_name"],
+                        pipeline_name: config["pipeline_settings"]["pipeline_name"],
+                        lora: config["pipeline_settings"]["lora_name"],
+                        controlnet: config["pipeline_settings"]["controlnet_name"],
+                        adapter: config["pipeline_settings"]["adapter_name"],
+                    }
+                )
+
+            if module_key == "prompts":
+                output.update(
+                    {
+                        text_prompt_input: config["prompts"]["text_prompt_inputs"],
+                        negative_prompt_input: config["prompts"][
+                            "negative_prompt_inputs"
+                        ],
+                    }
+                )
+
+            if module_key == "diffusion_settings":
+                output.update(
+                    {
+                        image_height: config["diffusion_settings"]["image_height"],
+                        image_width: config["diffusion_settings"]["image_width"],
+                        num_iteration_steps: config["diffusion_settings"][
+                            "num_inference_steps"
+                        ],
+                        guidance_scale: config["diffusion_settings"]["guidance_scale"],
+                        strength: config["diffusion_settings"]["strength"],
+                        seed: config["diffusion_settings"]["seed"],
+                        batch_size: config["diffusion_settings"]["batch_size"],
+                        scheduler: config["diffusion_settings"]["scheduler"],
+                        use_default_scheduler: config["diffusion_settings"][
+                            "use_default_scheduler"
+                        ],
+                        use_prompt_embeds: config["diffusion_settings"][
+                            "use_prompt_embeds"
+                        ],
+                        use_fixed_latent: config["diffusion_settings"][
+                            "use_fixed_latent"
+                        ],
+                        additional_pipeline_arguments: config["diffusion_settings"][
+                            "additional_pipeline_arguments"
+                        ],
+                    }
+                )
+            if module_key == "animation_settings":
+                output.update(
+                    {
+                        interpolation_type: config["animation_settings"][
+                            "interpolation_type"
+                        ],
+                        interpolation_args: config["animation_settings"][
+                            "interpolation_args"
+                        ],
+                        zoom: config["animation_settings"]["zoom"],
+                        translate_x: config["animation_settings"]["translate_x"],
+                        translate_y: config["animation_settings"]["translate_y"],
+                        angle: config["animation_settings"]["angle"],
+                        padding_mode: config["animation_settings"]["padding_mode"],
+                        coherence_scale: config["animation_settings"][
+                            "coherence_scale"
+                        ],
+                        coherence_alpha: config["animation_settings"][
+                            "coherence_alpha"
+                        ],
+                        coherence_steps: config["animation_settings"][
+                            "coherence_steps"
+                        ],
+                        noise_schedule: config["animation_settings"]["noise_schedule"],
+                        apply_color_matching: config["animation_settings"][
+                            "use_color_matching"
+                        ],
+                    }
+                )
+            if module_key == "preprocessing_settings":
+                output.update(
+                    {preprocessing_type: config["preprocessing_settings"]["preprocess"]}
+                )
+
+        return output
+
     load_session_settings_event = load_session_settings_btn.click(
         _load_session,
         [
@@ -681,50 +796,55 @@ with demo:
             load_repo_id,
             load_session_name,
             load_session_settings_filter,
-            [
-                text_prompt_input,
-                negative_prompt_input,
-                image_width,
-                image_height,
-                num_iteration_steps,
-                guidance_scale,
-                strength,
-                seed,
-                batch_size,
-                fps,
-                use_default_scheduler,
-                scheduler,
-                scheduler_kwargs,
-                use_fixed_latent,
-                use_prompt_embeds,
-                num_latent_channels,
-                audio_input,
-                audio_component,
-                mel_spectogram_reduce,
-                image_input,
-                video_input,
-                video_use_pil_format,
-                output_format,
-                model_name,
-                controlnet,
-                additional_pipeline_arguments,
-                interpolation_type,
-                interpolation_args,
-                zoom,
-                translate_x,
-                translate_y,
-                angle,
-                padding_mode,
-                coherence_scale,
-                coherence_alpha,
-                coherence_steps,
-                noise_schedule,
-                apply_color_matching,
-                preprocessing_type,
-            ],
+        ],
+        outputs=[
+            pipeline_name,
+            model_name,
+            lora,
+            controlnet,
+            adapter,
+            custom_pipeline,
+            text_prompt_input,
+            negative_prompt_input,
+            image_width,
+            image_height,
+            num_iteration_steps,
+            guidance_scale,
+            strength,
+            seed,
+            batch_size,
+            fps,
+            use_default_scheduler,
+            scheduler,
+            scheduler_kwargs,
+            use_fixed_latent,
+            use_prompt_embeds,
+            num_latent_channels,
+            audio_input,
+            audio_component,
+            mel_spectogram_reduce,
+            image_input,
+            video_input,
+            video_use_pil_format,
+            output_format,
+            model_name,
+            controlnet,
+            additional_pipeline_arguments,
+            interpolation_type,
+            interpolation_args,
+            zoom,
+            translate_x,
+            translate_y,
+            angle,
+            padding_mode,
+            coherence_scale,
+            coherence_alpha,
+            coherence_steps,
+            noise_schedule,
+            apply_color_matching,
+            preprocessing_type,
         ],
     )
-
 
 if __name__ == "__main__":
     demo.queue(concurrency_count=2)

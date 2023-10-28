@@ -76,6 +76,7 @@ def run(
     output_format="mp4",
     model_name="runwayml/stable-diffusion-v1-5",
     controlnet_name=None,
+    adapter_name=None,
     lora_name=None,
     additional_pipeline_arguments="{}",
     interpolation_type="linear",
@@ -175,6 +176,7 @@ def run(
             "scheduler_kwargs": scheduler_kwargs,
             "image_height": height,
             "image_width": width,
+            "additional_pipeline_arguments": additional_pipeline_arguments,
         },
         "preprocessing_settings": {
             "preprocess": preprocess,
@@ -183,8 +185,8 @@ def run(
             "pipeline_name": pipe.__class__.__name__,
             "model_name": model_name,
             "controlnet_name": controlnet_name,
+            "adapter_name": adapter_name,
             "lora_name": lora_name,
-            "additional_pipeline_arguments": additional_pipeline_arguments,
         },
         "animation_settings": {
             "interpolation_type": interpolation_type,
