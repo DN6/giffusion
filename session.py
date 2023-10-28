@@ -1,5 +1,7 @@
+import json
+
 import gradio as gr
-from huggingface_hub import HfApi, create_repo
+from huggingface_hub import HfApi, create_repo, hf_hub_download
 
 api = HfApi()
 
@@ -8,9 +10,10 @@ def save_session(org_id, repo_id, path, session_name=None):
     if org_id is None:
         raise gr.Error("Please provide an Organization Id in order to save this run")
 
-    datasets = api.list_datasets(author=org_id)
-    if not any([repo_id == dataset.id for dataset in datasets]):
-        create_repo(repo_id, private=True, repo_type="dataset")
+    try:
+        repo_url = create_repo(repo_id, private=True, repo_type="dataset")
+    except Exception as e:
+        repo_url = None
 
     repo_id = f"{org_id}/{repo_id}"
     path_in_repo = path.split("/")[-1] if session_name is None else session_name
@@ -20,3 +23,17 @@ def save_session(org_id, repo_id, path, session_name=None):
         repo_id=repo_id,
         repo_type="dataset",
     )
+
+
+def load_session(org_id, repo_id, path, session_name=None):
+    if org_id is None:
+        raise gr.Error("Please provide an Organization Id in order to load this run")
+
+    repo_id = f"{org_id}/{repo_id}"
+    path = hf_hub_download(
+        repo_id, subfolder=path, filename="parameters.json", repo_type="dataset"
+    )
+    with open(path, "r") as f:
+        parameters = json.load(f)
+
+    return parameters

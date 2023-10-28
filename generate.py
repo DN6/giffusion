@@ -173,6 +173,8 @@ def run(
             "scheduler": scheduler,
             "use_default_scheduler": use_default_scheduler,
             "scheduler_kwargs": scheduler_kwargs,
+            "image_height": height,
+            "image_width": width,
         },
         "preprocessing_settings": {
             "preprocess": preprocess,

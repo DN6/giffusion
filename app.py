@@ -1,6 +1,7 @@
 import importlib
 import os
 import pathlib
+from math import e
 
 import gradio as gr
 import torch
@@ -9,7 +10,7 @@ from PIL import Image
 from wonderwords import RandomWord
 
 from generate import run
-from session import save_session
+from session import load_session, save_session
 from utils import (
     ToPILImage,
     get_audio_key_frame_information,
@@ -21,6 +22,8 @@ from utils import (
 )
 
 AUTOSAVE = os.getenv("GIFFUSION_AUTO_SAVE", True)
+ORG_ID = os.getenv("ORG_ID", None)
+REPO_ID = os.getenv("REPO_ID", None)
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
 OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "generated")
 MODEL_PATH = os.getenv("MODEL_PATH", "models")
@@ -166,6 +169,28 @@ def _save_session(org_id, repo_id, run_path, session_name):
     return f"Successfully saved session to {org_id}/{repo_id}/{name}"
 
 
+def _load_session(
+    org_id,
+    repo_id,
+    session_name,
+    settings_filter,
+    components,
+):
+    components_map = {c.elem_id: c for c in components}
+    config = load_session(org_id, repo_id, session_name)
+    if settings_filter:
+        output = {k: config[k] for k in settings_filter}
+        config = output
+
+    for module_key, module_values in config.items():
+        if module_key == "timestamp":
+            continue
+
+        for component_key, component_value in module_values.items():
+            component = components_map[component_key]
+            component.value = component_value
+
+
 def predict(
     run_path,
     pipe,
@@ -270,16 +295,29 @@ with demo:
         with gr.Column(scale=1):
             with gr.Accordion("Session Settings", open=False):
                 with gr.Tab("Save"):
-                    save_org_id = gr.Textbox(label="Org ID")
+                    save_org_id = gr.Textbox(label="Org ID", value=ORG_ID)
                     save_repo_id = gr.Textbox(label="Repo ID", value="giffusion")
                     save_session_name = gr.Textbox(label="Session Name")
                     save_session_btn = gr.Button(value="Save Session")
                     save_session_status = gr.Markdown()
 
                 with gr.Tab("Load"):
-                    load_config_path = gr.Textbox(label="Load Config Path")
+                    load_org_id = gr.Textbox(label="Load Config Path", value=ORG_ID)
+                    load_repo_id = gr.Textbox(label="Load Repo ID", value=REPO_ID)
+                    load_session_name = gr.Textbox(label="Session Name")
                     load_session_settings_btn = gr.Button(value="Load Session Settings")
-                    load_session_assets_btn = gr.Button(value="Load Session Assets")
+                    load_session_settings_filter = gr.Dropdown(
+                        [
+                            "prompts",
+                            "negative_prompts",
+                            "diffusion_settings",
+                            "preprocessing_settings",
+                            "pipeline_settings",
+                            "animation_settings",
+                            "media",
+                        ],
+                        multiselect=True,
+                    )
 
             with gr.Accordion("Pipeline Settings: Load Models and Pipelines"):
                 with gr.Column():
@@ -315,18 +353,26 @@ with demo:
 
             with gr.Accordion("Diffusion Settings", open=False):
                 with gr.Tab("Diffusion"):
-                    use_fixed_latent = gr.Checkbox(label="Use Fixed Init Latent")
-                    use_prompt_embeds = gr.Checkbox(
-                        label="Use Prompt Embeds", value=False, interactive=True
+                    use_fixed_latent = gr.Checkbox(
+                        label="Use Fixed Init Latent", elem_id="use_fixed_latent"
                     )
-                    seed = gr.Number(value=42, label="Numerical Seed")
-                    batch_size = gr.Slider(1, 64, step=1, value=1, label="Batch Size")
+                    use_prompt_embeds = gr.Checkbox(
+                        label="Use Prompt Embeds",
+                        value=False,
+                        interactive=True,
+                        elem_id="use_prompt_embed",
+                    )
+                    seed = gr.Number(value=42, label="Numerical Seed", elem_id="seed")
+                    batch_size = gr.Slider(
+                        1, 64, step=1, value=1, label="Batch Size", elem_id="batch_size"
+                    )
                     num_iteration_steps = gr.Slider(
                         10,
                         1000,
                         step=10,
                         value=20,
                         label="Number of Iteration Steps",
+                        elem_id="num_iteration_steps",
                     )
                     guidance_scale = gr.Slider(
                         0.5,
@@ -334,19 +380,29 @@ with demo:
                         step=0.5,
                         value=7.5,
                         label="Classifier Free Guidance Scale",
+                        elem_id="guidance_scale",
                     )
                     strength = gr.Textbox(
-                        label="Image Strength Schedule", value="0:(0.5)"
+                        label="Image Strength Schedule",
+                        value="0:(0.5)",
+                        elem_id="strength",
                     )
                     num_latent_channels = gr.Number(
-                        value=4, label="Number of Latent Channels"
+                        value=4,
+                        label="Number of Latent Channels",
+                        elem_id="num_latent_channels",
                     )
-                    image_height = gr.Number(value=512, label="Image Height")
-                    image_width = gr.Number(value=512, label="Image Width")
+                    image_height = gr.Number(
+                        value=512, label="Image Height", elem_id="image_height"
+                    )
+                    image_width = gr.Number(
+                        value=512, label="Image Width", elem_id="image_width"
+                    )
 
                 with gr.Tab("Scheduler"):
                     use_default_scheduler = gr.Checkbox(
-                        label="Use Default Pipeline Scheduler"
+                        label="Use Default Pipeline Scheduler",
+                        elem_id="use_default_scheduler",
                     )
                     scheduler = gr.Dropdown(
                         [
@@ -363,10 +419,12 @@ with demo:
                         ],
                         value="deis",
                         label="Scheduler",
+                        elem_id="scheduler",
                     )
                     scheduler_kwargs = gr.Textbox(
                         label="Scheduler Arguments",
                         value="{}",
+                        elem_id="scheduler_kwargs",
                     )
 
                 with gr.Tab("Pipeline"):
@@ -376,6 +434,7 @@ with demo:
                         interactive=True,
                         lines=4,
                         placeholder="A dictionary of key word arguments to pass to the pipeline",
+                        elem_id="additional_pipeline_arguments",
                     )
 
             with gr.Accordion("Animation Settings", open=False):
@@ -384,36 +443,66 @@ with demo:
                         ["linear", "sine", "curve"],
                         value="linear",
                         label="Interpolation Type",
+                        elem_id="interpolation_type",
                     )
                     interpolation_args = gr.Textbox(
-                        "", label="Interpolation Parameters", visible=True
+                        "",
+                        label="Interpolation Parameters",
+                        visible=True,
+                        elem_id="interpolation_args",
                     )
                 with gr.Tab("Motion"):
-                    zoom = gr.Textbox("", label="Zoom")
-                    translate_x = gr.Textbox("", label="Translate_X")
-                    translate_y = gr.Textbox("", label="Translate_Y")
-                    angle = gr.Textbox("", label="Angle")
+                    zoom = gr.Textbox("", label="Zoom", elem_id="zoom")
+                    translate_x = gr.Textbox(
+                        "", label="Translate_X", elem_id="translate_x"
+                    )
+                    translate_y = gr.Textbox(
+                        "", label="Translate_Y", elem_id="translate_y"
+                    )
+                    angle = gr.Textbox("", label="Angle", elem_id="angle")
                     padding_mode = gr.Dropdown(
                         ["zero", "border", "reflection"],
                         label="Padding Mode",
                         value="border",
+                        elem_id="padding_mode",
                     )
 
                 with gr.Tab("Coherence"):
                     coherence_scale = gr.Slider(
-                        0, 100000, step=50, value=0, label="Coherence Scale"
+                        0,
+                        100000,
+                        step=50,
+                        value=0,
+                        label="Coherence Scale",
+                        elem_id="coherence",
                     )
                     coherence_alpha = gr.Slider(
-                        0, 1.0, step=0.1, value=1.0, label="Coherence Alpha"
+                        0,
+                        1.0,
+                        step=0.1,
+                        value=1.0,
+                        label="Coherence Alpha",
+                        elem_id="coherence_alpha",
                     )
                     coherence_steps = gr.Slider(
-                        0, 100, step=1, value=1, label="Coherence Steps"
+                        0,
+                        100,
+                        step=1,
+                        value=1,
+                        label="Coherence Steps",
+                        elem_id="coherence_steps",
                     )
                     noise_schedule = gr.Textbox(
-                        label="Noise Schedule", value="0:(0.01)", interactive=True
+                        label="Noise Schedule",
+                        value="0:(0.01)",
+                        interactive=True,
+                        elem_id="noise_schedule",
                     )
                     apply_color_matching = gr.Checkbox(
-                        label="Use Color Matching", value=False, interactive=True
+                        label="Apply Color Matching",
+                        value=False,
+                        interactive=True,
+                        elem_id="apply_color_matching",
                     )
 
             with gr.Accordion("Inspiration Settings", open=False):
@@ -452,12 +541,14 @@ with demo:
                     value="""0: A corgi in the clouds\n60: A corgi in the ocean""",
                     label="Text Prompts",
                     interactive=True,
+                    elem_id="text_prompt_inputs",
                 )
             with gr.Row():
                 negative_prompt_input = gr.Textbox(
                     value="""low resolution, blurry, worst quality, jpeg artifacts""",
                     label="Negative Prompts",
                     interactive=True,
+                    elem_id="negative_prompt_inputs",
                 )
 
         with gr.Column(scale=1):
@@ -470,12 +561,14 @@ with demo:
                     ["percussive", "harmonic", "both"],
                     value="percussive",
                     label="Audio Component",
+                    elem_id="audio_component",
                 )
                 audio_info_btn = gr.Button(value="Get Key Frame Information")
                 mel_spectogram_reduce = gr.Dropdown(
                     ["mean", "median", "max"],
                     label="Mel Spectrogram Reduction",
                     value="max",
+                    elem_id="mel_spectrogram_reduce",
                 )
 
             with gr.Accordion("Video Input", open=False):
@@ -495,6 +588,7 @@ with demo:
                     CONTROLNET_PROCESSORS,
                     label="Preprocessing",
                     multiselect=True,
+                    elem_id="preprocess",
                 )
 
     pipe = gr.State()
@@ -576,9 +670,59 @@ with demo:
 
     stop.click(fn=None, inputs=None, outputs=None, cancels=[gen_event])
     save_session_btn.click(
-        save_session,
+        _save_session,
         inputs=[save_org_id, save_repo_id, run_path, save_session_name],
         outputs=[save_session_status],
+    )
+    load_session_settings_event = load_session_settings_btn.click(
+        _load_session,
+        [
+            load_org_id,
+            load_repo_id,
+            load_session_name,
+            load_session_settings_filter,
+            [
+                text_prompt_input,
+                negative_prompt_input,
+                image_width,
+                image_height,
+                num_iteration_steps,
+                guidance_scale,
+                strength,
+                seed,
+                batch_size,
+                fps,
+                use_default_scheduler,
+                scheduler,
+                scheduler_kwargs,
+                use_fixed_latent,
+                use_prompt_embeds,
+                num_latent_channels,
+                audio_input,
+                audio_component,
+                mel_spectogram_reduce,
+                image_input,
+                video_input,
+                video_use_pil_format,
+                output_format,
+                model_name,
+                controlnet,
+                additional_pipeline_arguments,
+                interpolation_type,
+                interpolation_args,
+                zoom,
+                translate_x,
+                translate_y,
+                angle,
+                padding_mode,
+                coherence_scale,
+                coherence_alpha,
+                coherence_steps,
+                noise_schedule,
+                apply_color_matching,
+                preprocessing_type,
+            ],
+        ],
     )
 
 
