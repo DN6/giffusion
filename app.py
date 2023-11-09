@@ -5,6 +5,7 @@ import pathlib
 import gradio as gr
 import torch
 from controlnet_aux.processor import MODELS as CONTROLNET_PROCESSORS
+from diffusers.utils import load_image
 from PIL import Image
 from wonderwords import RandomWord
 
@@ -164,7 +165,8 @@ def _get_video_frame_information(video_input):
     return "\n".join(["0: ", f"{max_frames - 1}: "]), gr.update(value=int(fps))
 
 
-def send_to_image_input(output, frame_id):
+def send_to_image_input(output):
+    """
     extension = pathlib.Path(output).suffix
     if extension == "gif":
         image = Image.open(output)
@@ -172,8 +174,8 @@ def send_to_image_input(output, frame_id):
     else:
         frames, _, _ = load_video_frames(output)
         output_image = ToPILImage()(frames[int(frame_id)])
-
-    return output_image
+    """
+    return output
 
 
 def send_to_video_input(video):
@@ -198,6 +200,18 @@ def _save_session(org_id, repo_id, run_path, session_name):
     name = session_name if session_name is not None else run_path.split("/")[-1]
 
     return f"Successfully saved session to {org_id}/{repo_id}/{name}"
+
+
+def _save_video(frames, run_path, fps, output_format):
+    if output_format == "mp4":
+        save_gif(frames, filename=f"{run_path}/output.mp4", fps=fps)
+
+    if output_format == "gif":
+        save_video(
+            frames,
+            filename=f"{run_path}/output.mp4",
+            fps=fps,
+        )
 
 
 def predict(
@@ -294,8 +308,9 @@ def predict(
 
         output_frames = []
         for image, image_save_path in image_generator:
-            yield image
-            output_frames.append(image_save_path)
+            frame_id = image_save_path.split("/")[-1].split(".")[0]
+            output_frames.append((image_save_path, frame_id))
+            yield output_frames
     except Exception as e:
         raise gr.Error(e)
 
@@ -538,10 +553,20 @@ with demo:
 
         with gr.Column(elem_id="output", scale=2):
             with gr.Row():
-                with gr.Tab("Preview"):
-                    preview = gr.Image(label="Current Generation")
+                with gr.Tab("Output"):
+                    preview = gr.Gallery(
+                        label="Current Generation",
+                        preview=True,
+                        n_rows=1,
+                        type="pil",
+                        elem_id="preview",
+                        show_label=True,
+                    )
+                    send_to_image_input_btn = gr.Button(value="Send to Image Input")
+
                 with gr.Tab("Video Output"):
                     output = gr.Image(label="Model Output", elem_id="output")
+                    send_to_video_input_btn = gr.Button(value="Send to Video Input")
 
             with gr.Row():
                 submit = gr.Button(
@@ -613,6 +638,7 @@ with demo:
 
     pipe = gr.State()
     run_path = gr.State()
+    current_frame = gr.State()
 
     load_pipeline_btn.click(
         load_pipeline,
@@ -635,9 +661,6 @@ with demo:
         inputs=[video_input],
         outputs=[text_prompt_input, fps],
     )
-
-    send_to_image_input_btn.click(send_to_image_input, [output, frame_id], image_input)
-    send_to_video_input_btn.click(send_to_video_input, [output], [video_input])
 
     submit_event = submit.click(create_run_path, outputs=[run_path])
     gen_event = submit_event.success(
@@ -696,6 +719,16 @@ with demo:
         inputs=[save_org_id, save_repo_id, run_path, save_session_name],
         outputs=[save_session_status],
     )
+
+    def _on_select(evt):
+        return evt.value
+
+    preview.select(_on_select, outputs=[current_frame])
+
+    def _send_to_image_input(current_frame):
+        return current_frame
+
+    send_to_image_input_btn.click(_send_to_image_input, current_frame, image_input)
 
     def _load_session(org_id, repo_id, session_name, settings_filter):
         config = load_session(org_id, repo_id, session_name)
@@ -845,6 +878,8 @@ with demo:
             preprocessing_type,
         ],
     )
+    save_video_btn.click(_save_video, [preview, run_path, fps, output_format], output)
+
 
 if __name__ == "__main__":
     demo.queue(concurrency_count=2)

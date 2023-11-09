@@ -20,10 +20,9 @@ from diffusers.schedulers import (
 from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
 
-from comet import start_experiment
 from flows import BYOPFlow
 from flows.flow_byop import BYOPFlow
-from utils import save_gif, save_parameters, save_video
+from utils import save_parameters
 
 logger = logging.getLogger(__name__)
 
