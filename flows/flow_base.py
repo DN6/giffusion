@@ -103,11 +103,9 @@ class BaseFlow:
     @torch.no_grad()
     def prompt_to_embedding(self, prompt):
         if self.is_sdxl:
-            text_embeddings, pooled_embeddings = self.compel_proc(
-                prompt, device=self.device
-            )
+            text_embeddings, pooled_embeddings = self.compel_proc(prompt)
         else:
-            text_embeddings = self.compel_proc(prompt, device=self.device)
+            text_embeddings = self.compel_proc(prompt)
 
         output = {"text_embeddings": text_embeddings}
         if self.is_sdxl:
