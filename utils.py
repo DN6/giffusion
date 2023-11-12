@@ -175,7 +175,7 @@ def load_video_frames(path):
 
 
 def save_video(frames, filename="./output.mp4", fps=24, quality=95, audio_input=None):
-    imgs = [Image.open(f) for f in sorted(frames)]
+    imgs = [Image.open(f) for f in sorted(frames, key=lambda x: x.split("/")[-1])]
     if quality < 95:
         imgs = list(map(lambda x: x.resize((128, 128), Image.LANCZOS), imgs))
 
