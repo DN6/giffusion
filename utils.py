@@ -196,6 +196,7 @@ def save_video(frames, filename="./output.mp4", fps=24, quality=95, audio_input=
             audio_array=audio_tensor,
             audio_fps=sr,
             audio_codec="aac",
+            video_codec="libx264",
         )
     else:
         write_video(

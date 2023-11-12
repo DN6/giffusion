@@ -1,22 +1,16 @@
 import importlib
 import os
-import pathlib
 
 import gradio as gr
 import torch
 from controlnet_aux.processor import MODELS as CONTROLNET_PROCESSORS
-from diffusers.utils import load_image
-from PIL import Image
 from wonderwords import RandomWord
 
 from generate import run
 from session import load_session, save_session
 from utils import (
-    ToPILImage,
     get_audio_key_frame_information,
     get_video_frame_information,
-    load_video_frames,
-    save_gif,
     save_video,
     set_xformers,
 )
@@ -182,11 +176,6 @@ def send_to_video_input(video):
     return video
 
 
-def send_to_video_output(state):
-    video_output = next(state)
-    return video_output
-
-
 def create_run_path():
     run_name = f"{wordgen.word(include_parts_of_speech=['adjectives'])}-{wordgen.word(include_parts_of_speech=['nouns'])}"
     run_path = os.path.join(OUTPUT_BASE_PATH, run_name)
@@ -203,15 +192,15 @@ def _save_session(org_id, repo_id, run_path, session_name):
 
 
 def _save_video(frames, run_path, fps, output_format):
-    if output_format == "mp4":
-        save_gif(frames, filename=f"{run_path}/output.mp4", fps=fps)
+    image_paths = [frame.image.path for frame in frames.root]
+    output = f"{run_path}/output.mp4"
+    save_video(
+        frames=image_paths,
+        filename=output,
+        fps=fps,
+    )
 
-    if output_format == "gif":
-        save_video(
-            frames,
-            filename=f"{run_path}/output.mp4",
-            fps=fps,
-        )
+    return output
 
 
 def predict(
@@ -557,26 +546,22 @@ with demo:
                     preview = gr.Gallery(
                         label="Current Generation",
                         preview=True,
-                        n_rows=1,
-                        type="pil",
                         elem_id="preview",
                         show_label=True,
                     )
                     send_to_image_input_btn = gr.Button(value="Send to Image Input")
 
                 with gr.Tab("Video Output"):
-                    output = gr.Image(label="Model Output", elem_id="output")
+                    output = gr.Video(label="Model Output", elem_id="output")
                     send_to_video_input_btn = gr.Button(value="Send to Video Input")
 
             with gr.Row():
                 submit = gr.Button(
-                    label="Submit",
                     value="Create",
                     variant="primary",
                     elem_id="submit-btn",
                 )
                 stop = gr.Button(
-                    label="Submit",
                     value="Stop",
                     elem_id="stop-btn",
                 )
@@ -620,13 +605,6 @@ with demo:
                 video_input = gr.Video(label="Video Input")
                 video_info_btn = gr.Button(value="Get Key Frame Infomation")
                 video_use_pil_format = gr.Checkbox(label="Use PIL Format", value=True)
-
-            with gr.Accordion("Resample Output", open=False):
-                with gr.Accordion("Send to Image Input", open=False):
-                    frame_id = gr.Number(value=0, label="Frame ID")
-                    send_to_image_input_btn = gr.Button("Send to Image Input")
-                with gr.Accordion("Send to Video Input", open=False):
-                    send_to_video_input_btn = gr.Button("Send to Video Input")
 
             with gr.Accordion("Controlnet Preprocessing Settings", open=False):
                 preprocessing_type = gr.Dropdown(
@@ -720,10 +698,13 @@ with demo:
         outputs=[save_session_status],
     )
 
-    def _on_select(evt):
-        return evt.value
+    def _on_select(evt: gr.SelectData):
+        value = evt.value
+        image = value["image"]["path"]
 
-    preview.select(_on_select, outputs=[current_frame])
+        return image
+
+    preview.select(_on_select, None, outputs=[current_frame])
 
     def _send_to_image_input(current_frame):
         return current_frame
@@ -879,8 +860,7 @@ with demo:
         ],
     )
     save_video_btn.click(_save_video, [preview, run_path, fps, output_format], output)
-
+    send_to_video_input_btn.click(send_to_video_input, output, video_input)
 
 if __name__ == "__main__":
-    demo.queue(concurrency_count=2)
     demo.launch(share=True, debug=DEBUG)
