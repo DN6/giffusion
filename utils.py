@@ -123,10 +123,15 @@ def slerp(t, v0, v1, DOT_THRESHOLD=0.9995):
     if not isinstance(v0, np.ndarray):
         inputs_are_torch = True
         input_device = v0.device
-        v0 = v0.cpu().numpy()
-        v1 = v1.cpu().numpy()
+        d_type = v0.dtype
+        v0 = v0.cpu().numpy().astype(np.float32)
+        v1 = v1.cpu().numpy().astype(np.float32)
 
-    dot = np.sum(v0 * v1 / (np.linalg.norm(v0) * np.linalg.norm(v1)))
+    norm_v0 = np.linalg.norm(v0)
+    norm_v1 = np.linalg.norm(v1)
+
+    dot = np.sum(v0 * v1 / (norm_v0 * norm_v1))
+
     if np.abs(dot) > DOT_THRESHOLD:
         v2 = (1 - t) * v0 + t * v1
     else:
@@ -139,7 +144,7 @@ def slerp(t, v0, v1, DOT_THRESHOLD=0.9995):
         v2 = s0 * v0 + s1 * v1
 
     if inputs_are_torch:
-        v2 = torch.from_numpy(v2).to(input_device)
+        v2 = torch.from_numpy(v2).to(input_device).to(d_type)
 
     return v2
 

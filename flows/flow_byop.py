@@ -466,16 +466,18 @@ class BYOPFlow(BaseFlow):
             end = frame_idx + batch_size
 
             frame_batch = frames[start:end]
-            prompts = list(map(lambda x: self.prompts[x], frame_batch))
+            prompts_batch = list(map(lambda x: self.prompts[x], frame_batch))
             if self.use_prompt_embeds:
-                prompts = list(map(lambda x: x["text_embeddings"], prompts))
+                prompts = list(map(lambda x: x["text_embeddings"], prompts_batch))
                 prompts = torch.cat(prompts, dim=0)
 
                 if self.is_sdxl:
                     pooled_prompts = list(
-                        map(lambda x: x["pooled_embeddings"], prompts)
+                        map(lambda x: x["pooled_embeddings"], prompts_batch)
                     )
-                    pooled_prompts = torch.cat(prompts, dim=0)
+                    pooled_prompts = torch.cat(pooled_prompts, dim=0)
+            else:
+                prompts = prompts_batch
 
             latents = list(map(lambda x: self.init_latents[x], frame_batch))
             latents = torch.cat(latents, dim=0)
@@ -498,7 +500,7 @@ class BYOPFlow(BaseFlow):
                 "images": images,
                 "frame_ids": frame_batch,
             }
-            if self.is_sdxl:
+            if self.is_sdxl and self.use_prompt_embeds:
                 outputs.update({"pooled_prompts": pooled_prompts})
 
             yield outputs
