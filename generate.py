@@ -20,17 +20,14 @@ from diffusers.schedulers import (
 from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
 
-from comet import start_experiment
 from flows import BYOPFlow
 from flows.flow_byop import BYOPFlow
-from utils import save_gif, save_parameters, save_video
+from utils import save_parameters
 
 logger = logging.getLogger(__name__)
 
 # Disable denoising progress bar
 disable_progress_bar()
-
-OUTPUT_BASE_PATH = os.getenv("OUTPUT_BASE_PATH", "./generated")
 
 
 def load_scheduler(scheduler, **kwargs):
@@ -51,6 +48,7 @@ def load_scheduler(scheduler, **kwargs):
 
 
 def run(
+    run_path,
     pipe,
     text_prompt_inputs,
     negative_prompt_inputs,
@@ -77,6 +75,8 @@ def run(
     output_format="mp4",
     model_name="runwayml/stable-diffusion-v1-5",
     controlnet_name=None,
+    adapter_name=None,
+    lora_name=None,
     additional_pipeline_arguments="{}",
     interpolation_type="linear",
     interpolation_args="",
@@ -88,6 +88,7 @@ def run(
     coherence_scale=300,
     coherence_alpha=1.0,
     coherence_steps=3,
+    noise_schedule=None,
     use_color_matching=False,
     preprocess=None,
 ):
@@ -96,56 +97,8 @@ def run(
             "Pipline object has not been created. Please load a Pipline before submitting a run"
         )
 
-    experiment = start_experiment()
-
-    run_name = datetime.today().strftime("%Y-%m-%d-%H:%M:%S")
-    run_path = os.path.join(OUTPUT_BASE_PATH, run_name)
-    run_image_save_path = os.path.join(run_path, "imgs")
-    os.makedirs(run_image_save_path, exist_ok=True)
-
+    timestamp = datetime.today().strftime("%Y-%m-%d-%H:%M:%S")
     device = pipe.device
-
-    parameters = {
-        "text_prompt_inputs": text_prompt_inputs,
-        "negative_prompt_inputs": negative_prompt_inputs,
-        "num_inference_steps": num_inference_steps,
-        "guidance_scale": guidance_scale,
-        "batch_size": batch_size,
-        "scheduler": scheduler,
-        "use_default_scheduler": use_default_scheduler,
-        "num_latent_channels": num_latent_channels,
-        "seed": seed,
-        "fps": fps,
-        "use_fixed_latent": use_fixed_latent,
-        "use_prompt_embeds": use_prompt_embeds,
-        "audio_component": audio_component,
-        "mel_spectogram_reduce": mel_spectogram_reduce,
-        "output_format": output_format,
-        "pipeline_name": pipe.__class__.__name__,
-        "model_name": model_name,
-        "controlnet_name": controlnet_name,
-        "scheduler_kwargs": scheduler_kwargs,
-        "additional_pipeline_arguments": additional_pipeline_arguments,
-        "interpolation_type": interpolation_type,
-        "interpolation_args": interpolation_args,
-        "zoom": zoom,
-        "translate_x": translate_x,
-        "translate_y": translate_y,
-        "angle": angle,
-        "padding_mode": padding_mode,
-        "coherence_scale": coherence_scale,
-        "coherence_alpha": coherence_alpha,
-        "coherence_steps": coherence_steps,
-        "use_color_matching": use_color_matching,
-        "preprocess": preprocess,
-    }
-    save_parameters(run_path, parameters)
-
-    if (video_input is not None) or (image_input is not None):
-        parameters.update({"strength": strength})
-
-    if experiment:
-        experiment.log_parameters(parameters)
 
     if not use_default_scheduler:
         scheduler_kwargs = json.loads(scheduler_kwargs)
@@ -197,42 +150,89 @@ def run(
         coherence_scale=coherence_scale,
         coherence_alpha=coherence_alpha,
         coherence_steps=coherence_steps,
+        noise_schedule=noise_schedule,
         use_color_matching=use_color_matching,
         preprocess=preprocess,
     )
 
     max_frames = flow.max_frames
-    output_frames = []
+    parameters = {
+        "prompts": {
+            "text_prompt_inputs": text_prompt_inputs,
+            "negative_prompt_inputs": negative_prompt_inputs,
+        },
+        "diffusion_settings": {
+            "num_inference_steps": num_inference_steps,
+            "guidance_scale": guidance_scale,
+            "strength": strength,
+            "batch_size": batch_size,
+            "seed": seed,
+            "use_fixed_latent": use_fixed_latent,
+            "use_prompt_embeds": use_prompt_embeds,
+            "strength": strength,
+            "scheduler": scheduler,
+            "use_default_scheduler": use_default_scheduler,
+            "scheduler_kwargs": scheduler_kwargs,
+            "image_height": height,
+            "image_width": width,
+            "additional_pipeline_arguments": additional_pipeline_arguments,
+        },
+        "preprocessing_settings": {
+            "preprocess": preprocess,
+        },
+        "pipeline_settings": {
+            "pipeline_name": pipe.__class__.__name__,
+            "model_name": model_name,
+            "controlnet_name": controlnet_name,
+            "adapter_name": adapter_name,
+            "lora_name": lora_name,
+        },
+        "animation_settings": {
+            "interpolation_type": interpolation_type,
+            "interpolation_args": interpolation_args,
+            "zoom": zoom,
+            "translate_x": translate_x,
+            "translate_y": translate_y,
+            "angle": angle,
+            "padding_mode": padding_mode,
+            "coherence_scale": coherence_scale,
+            "coherence_alpha": coherence_alpha,
+            "coherence_steps": coherence_steps,
+            "noise_schedule": noise_schedule,
+            "use_color_matching": use_color_matching,
+        },
+        "media": {
+            "audio_settings": {
+                "audio_component": audio_component,
+                "mel_spectogram_reduce": mel_spectogram_reduce,
+            },
+            "video_settings": {
+                "video_use_pil_format": video_use_pil_format,
+            },
+        },
+        "output_settings": {
+            "output_format": output_format,
+            "fps": fps,
+        },
+        "frame_information": {"last_frame_id": max_frames},
+        "timestamp": timestamp,
+    }
+    if (video_input is not None) or (image_input is not None):
+        parameters.update({"strength": strength})
+
+    save_parameters(run_path, parameters)
+
+    run_image_save_path = f"{run_path}/imgs"
+    os.makedirs(run_image_save_path, exist_ok=True)
 
     image_generator = flow.create()
-
     for output, frame_ids in tqdm(image_generator, total=max_frames // flow.batch_size):
         images = output.images
         for image, frame_idx in zip(images, frame_ids):
             img_save_path = f"{run_image_save_path}/{frame_idx:04d}.png"
             image.save(img_save_path)
-            output_frames.append(img_save_path)
 
-            if experiment:
-                experiment.log_image(img_save_path, image_name="frame", step=frame_idx)
-
-    if output_format == "gif":
-        output_filename = f"{run_path}/output.gif"
-        save_gif(frames=output_frames, filename=output_filename, fps=fps)
-
-    else:
-        output_filename = f"{run_path}/output.mp4"
-        save_video(
-            frames=output_frames,
-            filename=output_filename,
-            fps=fps,
-            audio_input=audio_input,
-        )
-
-    if experiment:
-        experiment.log_asset(output_filename)
-
-    return output_filename
+            yield image, img_save_path
 
 
 if __name__ == "__main__":

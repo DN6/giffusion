@@ -131,6 +131,7 @@ class BYOPFlow(BaseFlow):
 
         self.text_prompts = text_prompts
         self.negative_prompts = negative_prompts
+        self.is_sdxl = hasattr(self.pipe, "text_encoder_2")
 
         self.use_fixed_latent = use_fixed_latent
         self.use_prompt_embeds = use_prompt_embeds
@@ -364,8 +365,8 @@ class BYOPFlow(BaseFlow):
             start_frame, start_prompt = start_key_frame
             end_frame, end_prompt = end_key_frame
 
-            start_prompt_embed = self.prompt_to_embedding(start_prompt)
-            end_prompt_embed = self.prompt_to_embedding(end_prompt)
+            start_prompt_embeds = self.prompt_to_embedding(start_prompt)
+            end_prompt_embeds = self.prompt_to_embedding(end_prompt)
 
             interp_schedule = self.get_interpolation_schedule(
                 start_frame,
@@ -377,8 +378,19 @@ class BYOPFlow(BaseFlow):
             )
 
             for i, t in enumerate(interp_schedule):
-                prompt_embed = slerp(float(t), start_prompt_embed, end_prompt_embed)
-                output[i + start_frame] = prompt_embed
+                prompt_embed = slerp(
+                    float(t),
+                    start_prompt_embeds["text_embeddings"],
+                    end_prompt_embeds["text_embeddings"],
+                )
+                output[i + start_frame] = {"text_embeddings": prompt_embed}
+                if "pooled_embeddings" in start_prompt_embeds:
+                    pooled_embed = slerp(
+                        float(t),
+                        start_prompt_embeds["pooled_embeddings"],
+                        end_prompt_embeds["pooled_embeddings"],
+                    )
+                    output[i + start_frame].update({"pooled_embeddings": pooled_embed})
 
         return output
 
@@ -454,9 +466,18 @@ class BYOPFlow(BaseFlow):
             end = frame_idx + batch_size
 
             frame_batch = frames[start:end]
-            prompts = list(map(lambda x: self.prompts[x], frame_batch))
+            prompts_batch = list(map(lambda x: self.prompts[x], frame_batch))
             if self.use_prompt_embeds:
+                prompts = list(map(lambda x: x["text_embeddings"], prompts_batch))
                 prompts = torch.cat(prompts, dim=0)
+
+                if self.is_sdxl:
+                    pooled_prompts = list(
+                        map(lambda x: x["pooled_embeddings"], prompts_batch)
+                    )
+                    pooled_prompts = torch.cat(pooled_prompts, dim=0)
+            else:
+                prompts = prompts_batch
 
             latents = list(map(lambda x: self.init_latents[x], frame_batch))
             latents = torch.cat(latents, dim=0)
@@ -473,12 +494,16 @@ class BYOPFlow(BaseFlow):
             else:
                 images = []
 
-            yield {
+            outputs = {
                 "prompts": prompts,
                 "init_latents": latents,
                 "images": images,
                 "frame_ids": frame_batch,
             }
+            if self.is_sdxl and self.use_prompt_embeds:
+                outputs.update({"pooled_prompts": pooled_prompts})
+
+            yield outputs
 
     def prepare_inputs(self, batch):
         prompts = batch["prompts"]
@@ -505,6 +530,9 @@ class BYOPFlow(BaseFlow):
 
         if "prompt_embeds" in self.pipe_signature and self.use_prompt_embeds:
             pipe_kwargs.update({"prompt_embeds": prompts})
+            if self.is_sdxl:
+                pipe_kwargs.update({"pooled_prompt_embeds": batch["pooled_prompts"]})
+
         elif "prompt" in self.pipe_signature and not self.use_prompt_embeds:
             pipe_kwargs.update({"prompt": prompts})
 

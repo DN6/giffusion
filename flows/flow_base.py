@@ -2,6 +2,7 @@ import inspect
 
 import torch
 import torchvision.transforms as T
+from compel import Compel, ReturnedEmbeddingsType
 from PIL import Image
 
 to_pil = T.ToPILImage("RGB")
@@ -13,6 +14,20 @@ class BaseFlow:
         self.pipe = pipe
         self.device = device
         self.batch_size = batch_size
+
+        self.is_sdxl = hasattr(self.pipe, "text_encoder_2")
+        if self.is_sdxl:
+            self.compel_proc = Compel(
+                tokenizer=[pipe.tokenizer, pipe.tokenizer_2],
+                text_encoder=[pipe.text_encoder, pipe.text_encoder_2],
+                returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
+                requires_pooled=[False, True],
+            )
+
+        else:
+            self.compel_proc = Compel(
+                tokenizer=pipe.tokenizer, text_encoder=pipe.text_encoder
+            )
 
     def preprocess(self, image, image_size=(512, 512)):
         image = to_pil(image)
@@ -87,21 +102,16 @@ class BaseFlow:
 
     @torch.no_grad()
     def prompt_to_embedding(self, prompt):
-        if "|" in prompt:
-            prompt = [x.strip() for x in prompt.split("|")]
+        if self.is_sdxl:
+            text_embeddings, pooled_embeddings = self.compel_proc(prompt)
+        else:
+            text_embeddings = self.compel_proc(prompt)
 
-        text_inputs = self.pipe.tokenizer(
-            prompt,
-            padding="max_length",
-            max_length=self.pipe.tokenizer.model_max_length,
-            truncation=True,
-            return_tensors="pt",
-        )
-        text_inputs = text_inputs.input_ids.to(self.pipe.text_encoder.device)
-        text_embeddings = self.pipe.text_encoder(text_inputs)[0]
-        text_embeddings = text_embeddings.to(self.pipe.unet.dtype)
+        output = {"text_embeddings": text_embeddings}
+        if self.is_sdxl:
+            output["pooled_embeddings"] = pooled_embeddings
 
-        return text_embeddings
+        return output
 
     @torch.no_grad()
     def denoise(self, latents, text_embeddings, i, t, guidance_scale):

@@ -15,3 +15,5 @@ torch
 torchvision
 controlnet-aux @ git+https://github.com/patrickvonplaten/controlnet_aux.git@8958bb75bcd1dfab8880a7a9ccb105865c6e57df
 invisible-watermark>=0.2.0
+wonderwords
+compel

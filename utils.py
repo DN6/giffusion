@@ -123,10 +123,15 @@ def slerp(t, v0, v1, DOT_THRESHOLD=0.9995):
     if not isinstance(v0, np.ndarray):
         inputs_are_torch = True
         input_device = v0.device
-        v0 = v0.cpu().numpy()
-        v1 = v1.cpu().numpy()
+        d_type = v0.dtype
+        v0 = v0.cpu().numpy().astype(np.float32)
+        v1 = v1.cpu().numpy().astype(np.float32)
 
-    dot = np.sum(v0 * v1 / (np.linalg.norm(v0) * np.linalg.norm(v1)))
+    norm_v0 = np.linalg.norm(v0)
+    norm_v1 = np.linalg.norm(v1)
+
+    dot = np.sum(v0 * v1 / (norm_v0 * norm_v1))
+
     if np.abs(dot) > DOT_THRESHOLD:
         v2 = (1 - t) * v0 + t * v1
     else:
@@ -139,7 +144,7 @@ def slerp(t, v0, v1, DOT_THRESHOLD=0.9995):
         v2 = s0 * v0 + s1 * v1
 
     if inputs_are_torch:
-        v2 = torch.from_numpy(v2).to(input_device)
+        v2 = torch.from_numpy(v2).to(input_device).to(d_type)
 
     return v2
 
@@ -149,7 +154,6 @@ def save_gif(frames, filename="./output.gif", fps=24, quality=95, loop=1):
     if quality < 95:
         imgs = list(map(lambda x: x.resize((128, 128), Image.LANCZOS), imgs))
 
-    imgs += imgs[-1:1:-1]
     duration = len(imgs) // fps
     imgs[0].save(
         fp=filename,
@@ -170,43 +174,8 @@ def load_video_frames(path):
     return frames, audio, metadata
 
 
-def sync_prompts_to_video(text_prompt_inputs, video_frames):
-    n_frames = len(video_frames)
-    text_key_frames = parse_key_frames(text_prompt_inputs)
-
-    output = {}
-    for start, end in zip(text_key_frames, text_key_frames[1:]):
-        start_key_frame, start_prompt = start
-        end_key_frame, end_prompt = end
-
-        for vf in range(n_frames):
-            if output.get(vf) is not None:
-                continue
-
-            if vf < end_key_frame:
-                output[vf] = start_prompt
-
-    max_text_key_frame_idx, max_text_key_frame_prompt = max(
-        text_key_frames, key=lambda x: x[0]
-    )
-
-    for vf in range(n_frames):
-        if vf >= max_text_key_frame_idx:
-            output[vf] = max_text_key_frame_prompt
-
-    min_text_key_frame_idx, min_text_key_frame_prompt = min(
-        text_key_frames, key=lambda x: x[0]
-    )
-    output[min_text_key_frame_idx] = min_text_key_frame_prompt
-
-    output = [[k, v] for k, v in output.items()]
-    output = sorted(output, key=lambda x: x[0])
-
-    return output
-
-
 def save_video(frames, filename="./output.mp4", fps=24, quality=95, audio_input=None):
-    imgs = [Image.open(f) for f in sorted(frames)]
+    imgs = [Image.open(f) for f in sorted(frames, key=lambda x: x.split("/")[-1])]
     if quality < 95:
         imgs = list(map(lambda x: x.resize((128, 128), Image.LANCZOS), imgs))
 
@@ -232,12 +201,14 @@ def save_video(frames, filename="./output.mp4", fps=24, quality=95, audio_input=
             audio_array=audio_tensor,
             audio_fps=sr,
             audio_codec="aac",
+            video_codec="libx264",
         )
     else:
         write_video(
             filename,
             video_array=img_tensors,
             fps=fps,
+            video_codec="libx264",
         )
 
 

@@ -35,6 +35,14 @@ python app.py
 
 ## Features
 
+### Saving and Loading Sessions
+
+Giffusion uss the Hugging Face Hub to save output generations and settings. To save and load sessions, you will first need to set your Hugging Face access token using `huggingface-cli login`.
+
+Once set, you can save your session by clicking on the `Save Session` button in the Session Settings. This will create a dataset repo on the Hub and save your settings and output generations to a folder with a randomly generated name. You can also set the Repo ID and Session Name manually in order to save your session to a specific repo.
+
+Loading sessions works in a similar manner. Simply provide the Repo ID and Session Name of the session you would like to load and click on the `Load Session` button. You can filter the settings for the individual components in the UI using the dropdown selector.
+
 ### Bring Your Own Pipeline
 
 Giffusion supports using any pipeline and compatible checkpoint from the [Diffusers](https://huggingface.co/docs/diffusers/index) library. Simply paste in the checkpoint name and pipeline name in the `Pipeline Settings`
@@ -59,6 +67,10 @@ lllyasviel/control_v11p_sd15_softedge, lllyasviel/control_v11f1p_sd15_depth
 
 You can use your own custom pipelines with Giffusion as well. Simply paste in the path to your Pipeline file in the `Custom Pipeline` section. The Pipeline file must follow a format similar to the [community pipelines found in Diffusers](https://github.com/huggingface/diffusers/tree/main/examples/community)
 
+
+### Compel Prompt Weighting Support
+
+Prompt Embeds are now generated via [Compel](https://huggingface.co/docs/diffusers/using-diffusers/weighted_prompts) and support the weighting syntanx outlined [here](https://github.com/damian0815/compel)
 
 ### Multiframe Generation
 
