@@ -68,6 +68,10 @@ lllyasviel/control_v11p_sd15_softedge, lllyasviel/control_v11f1p_sd15_depth
 You can use your own custom pipelines with Giffusion as well. Simply paste in the path to your Pipeline file in the `Custom Pipeline` section. The Pipeline file must follow a format similar to the [community pipelines found in Diffusers](https://github.com/huggingface/diffusers/tree/main/examples/community)
 
 
+### Compel Prompt Weighting Support
+
+Prompt Embeds are now generated via [Compel](https://huggingface.co/docs/diffusers/using-diffusers/weighted_prompts) and support the weighting syntanx outlined [here](https://github.com/damian0815/compel)
+
 ### Multiframe Generation
 
 Giffusion follows a prompt syntax similar to the one used in [Deforum Art's Stable Diffusion Notebook](https://deforum.github.io/)
