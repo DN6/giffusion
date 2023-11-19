@@ -12,6 +12,7 @@ from diffusers.schedulers import (
     EulerAncestralDiscreteScheduler,
     EulerDiscreteScheduler,
     KDPM2AncestralDiscreteScheduler,
+    LCMScheduler,
     LMSDiscreteScheduler,
     PNDMScheduler,
     RePaintScheduler,
@@ -43,6 +44,7 @@ def load_scheduler(scheduler, **kwargs):
         euler_ads=EulerAncestralDiscreteScheduler(**kwargs),
         repaint=RePaintScheduler(**kwargs),
         unipc=UniPCMultistepScheduler(**kwargs),
+        lcm=LCMScheduler(**kwargs),
     )
     return scheduler_map.get(scheduler)
 

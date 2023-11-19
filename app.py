@@ -325,7 +325,6 @@ with demo:
                     load_session_settings_filter = gr.Dropdown(
                         [
                             "prompts",
-                            "negative_prompts",
                             "diffusion_settings",
                             "preprocessing_settings",
                             "pipeline_settings",
@@ -440,6 +439,7 @@ with demo:
                             "euler",
                             "euler_ads",
                             "unipc",
+                            "lcm",
                         ],
                         value="deis",
                         label="Scheduler",
@@ -464,7 +464,7 @@ with demo:
             with gr.Accordion("Animation Settings", open=False):
                 with gr.Tab("Interpolation"):
                     interpolation_type = gr.Dropdown(
-                        ["linear", "sine", "curve"],
+                        ["linear", "curve"],
                         value="linear",
                         label="Interpolation Type",
                         elem_id="interpolation_type",
