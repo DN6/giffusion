@@ -325,7 +325,6 @@ with demo:
                     load_session_settings_filter = gr.Dropdown(
                         [
                             "prompts",
-                            "negative_prompts",
                             "diffusion_settings",
                             "preprocessing_settings",
                             "pipeline_settings",
