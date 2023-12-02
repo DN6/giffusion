@@ -159,19 +159,6 @@ def _get_video_frame_information(video_input):
     return "\n".join(["0: ", f"{max_frames - 1}: "]), gr.update(value=int(fps))
 
 
-def send_to_image_input(output):
-    """
-    extension = pathlib.Path(output).suffix
-    if extension == "gif":
-        image = Image.open(output)
-        output_image = image.seek(frame_id)
-    else:
-        frames, _, _ = load_video_frames(output)
-        output_image = ToPILImage()(frames[int(frame_id)])
-    """
-    return output
-
-
 def send_to_video_input(video):
     return video
 
