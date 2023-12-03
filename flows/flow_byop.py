@@ -510,8 +510,9 @@ class BYOPFlow(BaseFlow):
 
         pipe_kwargs = dict(
             num_inference_steps=self.num_inference_steps,
-            guidance_scale=self.guidance_scale,
         )
+        if "guidance_scale" in self.pipe_signature:
+            pipe_kwargs.update({"guidance_scale": self.guidance_scale})
 
         if "height" in self.pipe_signature:
             pipe_kwargs.update({"height": self.height})

@@ -16,7 +16,9 @@ class BaseFlow:
         self.batch_size = batch_size
 
         self.is_sdxl = hasattr(self.pipe, "text_encoder_2")
-        if self.is_sdxl:
+        self.has_tokenizer = hasattr(self.pipe, "tokenizer")
+
+        if self.is_sdxl and self.has_tokenizer:
             self.compel_proc = Compel(
                 tokenizer=[pipe.tokenizer, pipe.tokenizer_2],
                 text_encoder=[pipe.text_encoder, pipe.text_encoder_2],
@@ -24,7 +26,7 @@ class BaseFlow:
                 requires_pooled=[False, True],
             )
 
-        else:
+        elif self.has_tokenizer:
             self.compel_proc = Compel(
                 tokenizer=pipe.tokenizer, text_encoder=pipe.text_encoder
             )
