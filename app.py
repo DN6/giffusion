@@ -118,10 +118,10 @@ def load_pipeline(
         if hasattr(pipe, "load_ip_adapter"):
             if "XL" in pipe.__class__.__name__:
                 pipe.load_ip_adapter(
-                    "h94/IP-Adapter", subfolder="models", weight_name="ip-adapter_sd15.bin", torch_dtype=torch.float16
+                    "h94/IP-Adapter", subfolder="sdxl_models", weight_name="ip-adapter_sdxl.bin", torch_dtype=torch.float16
                 )
             else:
-                pipe.load_ip_adapter("h94/IP-Adapter", subfolder="models", weight_name="ip-adapter_sdxl_vit-h.bin", torch_dtype=torch.float16)
+                pipe.load_ip_adapter("h94/IP-Adapter", subfolder="models", weight_name="ip-adapter_sd15.bin", torch_dtype=torch.float16)
 
         if hasattr(pipe, "enable_model_cpu_offload"):
             pipe.enable_model_cpu_offload()
@@ -346,6 +346,7 @@ with demo:
                         adapter = gr.Textbox(label="T2I Adapter Checkpoint")
 
                     custom_pipeline = gr.Textbox(label="Custom Pipeline")
+                    use_ip_adapter = gr.Checkbox(interactive=True, label="Use IP Adapter", value=False)
 
                 with gr.Column():
                     with gr.Row():
@@ -434,6 +435,7 @@ with demo:
                             "euler",
                             "euler_ads",
                             "unipc",
+                            "lcm",
                         ],
                         value="deis",
                         label="Scheduler",
@@ -619,7 +621,7 @@ with demo:
 
     load_pipeline_btn.click(
         load_pipeline,
-        [model_name, pipeline_name, controlnet, adapter, lora, custom_pipeline, pipe],
+        [model_name, pipeline_name, controlnet, adapter, lora, use_ip_adapter, custom_pipeline, pipe],
         [pipe, load_message],
     )
 

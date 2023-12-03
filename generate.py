@@ -10,8 +10,9 @@ from diffusers.schedulers import (DDIMScheduler, DDPMScheduler,
                                   EulerAncestralDiscreteScheduler,
                                   EulerDiscreteScheduler,
                                   KDPM2AncestralDiscreteScheduler,
-                                  LMSDiscreteScheduler, PNDMScheduler,
-                                  RePaintScheduler, UniPCMultistepScheduler)
+                                  LCMScheduler, LMSDiscreteScheduler,
+                                  PNDMScheduler, RePaintScheduler,
+                                  UniPCMultistepScheduler)
 from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
 
@@ -37,6 +38,7 @@ def load_scheduler(scheduler, **kwargs):
         euler_ads=EulerAncestralDiscreteScheduler(**kwargs),
         repaint=RePaintScheduler(**kwargs),
         unipc=UniPCMultistepScheduler(**kwargs),
+        lcm=LCMScheduler(**kwargs),
     )
     return scheduler_map.get(scheduler)
 

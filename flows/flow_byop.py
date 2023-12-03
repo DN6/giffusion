@@ -548,7 +548,7 @@ class BYOPFlow(BaseFlow):
                 pipe_kwargs.update({"image": self.image_input})
 
         if "ip_adapter_image" in self.pipe_signature:
-            pipe_kwargs.upadte({"ip_adapter_image": self.ip_adapter_image})
+            pipe_kwargs.update({"ip_adapter_image": self.ip_adapter_image})
 
         if "generator" in self.pipe_signature:
             pipe_kwargs.update({"generator": self.generator})
