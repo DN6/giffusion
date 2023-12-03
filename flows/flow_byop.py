@@ -1,6 +1,5 @@
 import inspect
 import random
-from typing import Any
 
 import librosa
 import numpy as np
@@ -10,15 +9,9 @@ from PIL import Image
 from torchvision.transforms import ToPILImage, ToTensor
 
 from preprocessor import Preprocessor
-from utils import (
-    apply_lab_color_matching,
-    apply_transformation2D,
-    curve_from_cn_string,
-    get_mel_reduce_func,
-    load_video_frames,
-    parse_key_frames,
-    slerp,
-)
+from utils import (apply_lab_color_matching, apply_transformation2D,
+                   curve_from_cn_string, get_mel_reduce_func,
+                   load_video_frames, parse_key_frames, slerp)
 
 from .flow_base import BaseFlow
 
@@ -114,6 +107,8 @@ class BYOPFlow(BaseFlow):
         batch_size=1,
         fps=10,
         negative_prompts="",
+        image_prompt=None,
+        ip_adapter_scale=1.0,
         additional_pipeline_arguments={},
         interpolation_type="linear",
         interpolation_args="",
@@ -131,6 +126,8 @@ class BYOPFlow(BaseFlow):
 
         self.text_prompts = text_prompts
         self.negative_prompts = negative_prompts
+        self.ip_adapter_image = image_prompt
+        self.ip_adapter_schedule = curve_from_cn_string(ip_adapter_scale)
         self.is_sdxl = hasattr(self.pipe, "text_encoder_2")
 
         self.use_fixed_latent = use_fixed_latent
@@ -152,7 +149,7 @@ class BYOPFlow(BaseFlow):
         self.preprocess = preprocess
         if len(self.preprocess) > 1 and self.batch_size > 1:
             raise ValueError(
-                f"In order to use MultiControlnet",
+                "In order to use MultiControlnet",
                 f"batch size must be set to 1 but found batch size {self.batch_size}",
             )
         self.preprocessor = Preprocessor(self.preprocess)
@@ -215,7 +212,7 @@ class BYOPFlow(BaseFlow):
         if motion_args:
             if self.batch_size != 1:
                 raise ValueError(
-                    f"In order to use Animation Arguments",
+                    "In order to use Animation Arguments",
                     f"batch size must be set to 1 but found batch size {self.batch_size}",
                 )
 
@@ -243,7 +240,7 @@ class BYOPFlow(BaseFlow):
     def check_inputs(self, image_input, video_input):
         if image_input is not None and video_input is not None:
             raise ValueError(
-                f"Cannot forward both `image_input` and `video_input`. Please make sure to"
+                "Cannot forward both `image_input` and `video_input`. Please make sure to"
                 " only forward one of the two."
             )
 
@@ -550,8 +547,14 @@ class BYOPFlow(BaseFlow):
             elif self.image_input is not None:
                 pipe_kwargs.update({"image": self.image_input})
 
+        if "ip_adapter_image" in self.pipe_signature:
+            pipe_kwargs.upadte({"ip_adapter_image": self.ip_adapter_image})
+
         if "generator" in self.pipe_signature:
             pipe_kwargs.update({"generator": self.generator})
+
+        if hasattr(self.pipe, "set_ip_adapter_scale"):
+            self.pipe.set_ip_adapter_scale(self.ip_adapter_schedule[frame_ids[0]])
 
         pipe_kwargs.update(self.additional_pipeline_arguments)
 

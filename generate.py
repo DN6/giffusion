@@ -4,24 +4,18 @@ import os
 from datetime import datetime
 
 import typer
-from diffusers.schedulers import (
-    DDIMScheduler,
-    DDPMScheduler,
-    DEISMultistepScheduler,
-    DPMSolverSinglestepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    KDPM2AncestralDiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    RePaintScheduler,
-    UniPCMultistepScheduler,
-)
+from diffusers.schedulers import (DDIMScheduler, DDPMScheduler,
+                                  DEISMultistepScheduler,
+                                  DPMSolverSinglestepScheduler,
+                                  EulerAncestralDiscreteScheduler,
+                                  EulerDiscreteScheduler,
+                                  KDPM2AncestralDiscreteScheduler,
+                                  LMSDiscreteScheduler, PNDMScheduler,
+                                  RePaintScheduler, UniPCMultistepScheduler)
 from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
 
 from flows import BYOPFlow
-from flows.flow_byop import BYOPFlow
 from utils import save_parameters
 
 logger = logging.getLogger(__name__)
@@ -47,11 +41,27 @@ def load_scheduler(scheduler, **kwargs):
     return scheduler_map.get(scheduler)
 
 
+def postprocess_output(output):
+    if hasattr(output, "frames"):
+        output = []
+        # flatten frames list if necessary
+        for frames in output.frames:
+            for frame in frames:
+                output.append(frame)
+
+    else:
+        output = output.images
+
+    return output
+
+
 def run(
     run_path,
     pipe,
     text_prompt_inputs,
     negative_prompt_inputs,
+    image_prompt_input=None,
+    ip_adapter_scale=1.0,
     height=512,
     width=512,
     num_inference_steps=50,
@@ -124,6 +134,8 @@ def run(
         pipe=pipe,
         text_prompts=text_prompt_inputs,
         negative_prompts=negative_prompt_inputs,
+        image_prompt=image_prompt_input,
+        ip_adapter_scale=ip_adapter_scale,
         guidance_scale=guidance_scale,
         strength=strength,
         num_inference_steps=num_inference_steps,
@@ -169,7 +181,6 @@ def run(
             "seed": seed,
             "use_fixed_latent": use_fixed_latent,
             "use_prompt_embeds": use_prompt_embeds,
-            "strength": strength,
             "scheduler": scheduler,
             "use_default_scheduler": use_default_scheduler,
             "scheduler_kwargs": scheduler_kwargs,
@@ -227,7 +238,7 @@ def run(
 
     image_generator = flow.create()
     for output, frame_ids in tqdm(image_generator, total=max_frames // flow.batch_size):
-        images = output.images
+        images = postprocess_output(output)
         for image, frame_idx in zip(images, frame_ids):
             img_save_path = f"{run_image_save_path}/{frame_idx:04d}.png"
             image.save(img_save_path)

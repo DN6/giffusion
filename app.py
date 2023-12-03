@@ -8,12 +8,8 @@ from wonderwords import RandomWord
 
 from generate import run
 from session import load_session, save_session
-from utils import (
-    get_audio_key_frame_information,
-    get_video_frame_information,
-    save_video,
-    set_xformers,
-)
+from utils import (get_audio_key_frame_information,
+                   get_video_frame_information, save_video, set_xformers)
 
 AUTOSAVE = os.getenv("GIFFUSION_AUTO_SAVE", True)
 ORG_ID = os.getenv("ORG_ID", None)
@@ -33,7 +29,7 @@ wordgen = RandomWord()
 
 
 def load_pipeline(
-    model_name, pipeline_name, controlnet, adapter, lora, custom_pipeline, pipe
+    model_name, pipeline_name, controlnet, adapter, lora, use_ip_adapter, custom_pipeline, pipe
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -119,6 +115,14 @@ def load_pipeline(
         if lora:
             pipe.load_lora_weights(lora)
 
+        if hasattr(pipe, "load_ip_adapter"):
+            if "XL" in pipe.__class__.__name__:
+                pipe.load_ip_adapter(
+                    "h94/IP-Adapter", subfolder="models", weight_name="ip-adapter_sd15.bin", torch_dtype=torch.float16
+                )
+            else:
+                pipe.load_ip_adapter("h94/IP-Adapter", subfolder="models", weight_name="ip-adapter_sdxl_vit-h.bin", torch_dtype=torch.float16)
+
         if hasattr(pipe, "enable_model_cpu_offload"):
             pipe.enable_model_cpu_offload()
         else:
@@ -195,6 +199,8 @@ def predict(
     pipe,
     text_prompt_input,
     negative_prompt_input,
+    image_prompt_input,
+    ip_adapter_scale,
     image_width,
     image_height,
     num_iteration_steps,
@@ -241,6 +247,8 @@ def predict(
             pipe=pipe,
             text_prompt_inputs=text_prompt_input,
             negative_prompt_inputs=negative_prompt_input,
+            image_prompt_input=image_prompt_input,
+            ip_adapter_scale=ip_adapter_scale,
             num_inference_steps=int(num_iteration_steps),
             height=int(image_height),
             width=int(image_width),
@@ -330,7 +338,7 @@ with demo:
                     pipeline_name = gr.Textbox(
                         label="Pipeline Name", value="DiffusionPipeline"
                     )
-                    lora = gr.Textbox(label="LoRA Checkpoint")
+                    lora = gr.Textbox(label="LoRA Checkpoints")
 
                     with gr.Tab("ControlNet"):
                         controlnet = gr.Textbox(label="ControlNet Checkpoint")
@@ -377,9 +385,9 @@ with demo:
                         1, 64, step=1, value=1, label="Batch Size", elem_id="batch_size"
                     )
                     num_iteration_steps = gr.Slider(
-                        10,
-                        1000,
-                        step=10,
+                        1,
+                        100,
+                        step=1,
                         value=20,
                         label="Number of Iteration Steps",
                         elem_id="num_iteration_steps",
@@ -552,13 +560,18 @@ with demo:
                     elem_id="stop-btn",
                 )
             with gr.Row():
-                text_prompt_input = gr.Textbox(
-                    lines=10,
-                    value="""0: A corgi in the clouds\n60: A corgi in the ocean""",
-                    label="Text Prompts",
-                    interactive=True,
-                    elem_id="text_prompt_inputs",
-                )
+                with gr.Tab("Text Prompt"):
+                    text_prompt_input = gr.Textbox(
+                        lines=10,
+                        value="""0: A corgi in the clouds\n60: A corgi in the ocean""",
+                        label="Text Prompts",
+                        interactive=True,
+                        elem_id="text_prompt_inputs",
+                    )
+                with gr.Tab("Image Prompt"):
+                    image_prompt_input = gr.Image(label="Image Prompt", type="pil")
+                    ip_adapter_scale = gr.Textbox("0:(0.8)", label="IP Adapter Scale Schedule")
+
             with gr.Row():
                 negative_prompt_input = gr.Textbox(
                     value="""low resolution, blurry, worst quality, jpeg artifacts""",
@@ -634,6 +647,8 @@ with demo:
             pipe,
             text_prompt_input,
             negative_prompt_input,
+            image_prompt_input,
+            ip_adapter_scale,
             image_width,
             image_height,
             num_iteration_steps,
