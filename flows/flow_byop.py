@@ -1,5 +1,6 @@
 import inspect
 import random
+from os import pipe
 
 import librosa
 import numpy as np
@@ -557,6 +558,10 @@ class BYOPFlow(BaseFlow):
         if hasattr(self.pipe, "set_ip_adapter_scale"):
             self.pipe.set_ip_adapter_scale(self.ip_adapter_schedule[frame_ids[0]])
 
+        if hasattr(self.pipe, "callback"):
+            pipe_kwargs.update({"callback": self.coherence_callback.apply if self.use_coherence else None})
+            pipe_kwargs.update({"callback_steps": self.coherence_callback.steps if self.use_coherence else 1})
+
         pipe_kwargs.update(self.additional_pipeline_arguments)
 
         return pipe_kwargs
@@ -593,11 +598,7 @@ class BYOPFlow(BaseFlow):
             noise_level = self.noise_schedule[frame_id]
             self.coherence_callback.noise_level = noise_level
 
-        output = self.pipe(
-            **pipe_kwargs,
-            callback=self.coherence_callback.apply if self.use_coherence else None,
-            callback_steps=self.coherence_callback.steps if self.use_coherence else 1,
-        )
+        output = self.pipe(**pipe_kwargs)
 
         return output
 
@@ -608,14 +609,23 @@ class BYOPFlow(BaseFlow):
 
         for batch_idx, batch in enumerate(batchgen):
             output = self.run_inference(batch)
-            images = output.images
+            if hasattr(output, "images"):
+                images = output.images
+            elif hasattr(output, "frames"):
+                images = output.frames
 
-            if self.use_color_matching_only:
+            if self.use_color_matching_only and hasattr(output, "images"):
                 images = self.apply_color_matching(images)
                 output.images = images
 
             yield output, batch["frame_ids"]
 
+            if self.use_motion:
+                images = self.apply_motion(images, batch)
+                if self.use_color_matching:
+                    images = self.apply_color_matching(images)
+
+                self.image_input = self.preprocessor(images)
             if self.use_motion:
                 images = self.apply_motion(images, batch)
                 if self.use_color_matching:
