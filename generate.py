@@ -4,15 +4,20 @@ import os
 from datetime import datetime
 
 import typer
-from diffusers.schedulers import (DDIMScheduler, DDPMScheduler,
-                                  DEISMultistepScheduler,
-                                  DPMSolverSinglestepScheduler,
-                                  EulerAncestralDiscreteScheduler,
-                                  EulerDiscreteScheduler,
-                                  KDPM2AncestralDiscreteScheduler,
-                                  LCMScheduler, LMSDiscreteScheduler,
-                                  PNDMScheduler, RePaintScheduler,
-                                  UniPCMultistepScheduler)
+from diffusers.schedulers import (
+    DDIMScheduler,
+    DDPMScheduler,
+    DEISMultistepScheduler,
+    DPMSolverSinglestepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    KDPM2AncestralDiscreteScheduler,
+    LCMScheduler,
+    LMSDiscreteScheduler,
+    PNDMScheduler,
+    RePaintScheduler,
+    UniPCMultistepScheduler,
+)
 from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
 
@@ -41,20 +46,6 @@ def load_scheduler(scheduler, **kwargs):
         lcm=LCMScheduler(**kwargs),
     )
     return scheduler_map.get(scheduler)
-
-
-def postprocess_output(output):
-    if hasattr(output, "frames"):
-        output = []
-        # flatten frames list if necessary
-        for frames in output.frames:
-            for frame in frames:
-                output.append(frame)
-
-    else:
-        output = output.images
-
-    return output
 
 
 def run(
@@ -240,7 +231,7 @@ def run(
 
     image_generator = flow.create()
     for output, frame_ids in tqdm(image_generator, total=max_frames // flow.batch_size):
-        images = postprocess_output(output)
+        images = output.images
         for image, frame_idx in zip(images, frame_ids):
             img_save_path = f"{run_image_save_path}/{frame_idx:04d}.png"
             image.save(img_save_path)

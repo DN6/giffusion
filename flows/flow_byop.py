@@ -1,20 +1,44 @@
 import inspect
 import random
-from os import pipe
 
 import librosa
 import numpy as np
 import pandas as pd
 import torch
+from diffusers.utils.torch_utils import randn_tensor
 from PIL import Image
 from torchvision.transforms import ToPILImage, ToTensor
 
 from preprocessor import Preprocessor
-from utils import (apply_lab_color_matching, apply_transformation2D,
-                   curve_from_cn_string, get_mel_reduce_func,
-                   load_video_frames, parse_key_frames, slerp)
+from utils import (
+    apply_lab_color_matching,
+    apply_transformation2D,
+    curve_from_cn_string,
+    get_mel_reduce_func,
+    load_video_frames,
+    parse_key_frames,
+    slerp,
+)
 
 from .flow_base import BaseFlow
+
+
+class FlowOutput:
+    def __init__(self, output) -> None:
+        self.images = self.postprocess_output(output)
+
+    def postprocess_output(self, output):
+        if hasattr(output, "frames"):
+            output = []
+            # flatten frames list if necessary
+            for frames in output.frames:
+                for frame in frames:
+                    output.append(frame)
+
+            else:
+                output = output.images
+
+        return output
 
 
 class MotionCallback:
@@ -407,13 +431,27 @@ class BYOPFlow(BaseFlow):
     @torch.no_grad()
     def get_init_latents(self, key_frames, interpolation_config):
         output = {}
-        start_latent = torch.randn(
-            (
+
+        pipe_class = self.pipe.__class__.__name__
+        if pipe_class == "StableVideoDiffusionPipeline":
+            shape = (
+                1,
+                16,
+                self.num_latent_channels,
+                self.height // self.vae_scale_factor,
+                self.width // self.vae_scale_factor,
+            )
+
+        else:
+            shape = (
                 1,
                 self.num_latent_channels,
                 self.height // self.vae_scale_factor,
                 self.width // self.vae_scale_factor,
-            ),
+            )
+
+        start_latent = randn_tensor(
+            shape,
             dtype=self.pipe.unet.dtype,
             device=self.pipe.device,
             generator=self.generator,
@@ -428,16 +466,11 @@ class BYOPFlow(BaseFlow):
             end_latent = (
                 start_latent
                 if self.use_fixed_latent
-                else torch.randn(
-                    (
-                        1,
-                        self.num_latent_channels,
-                        self.height // self.vae_scale_factor,
-                        self.width // self.vae_scale_factor,
-                    ),
+                else randn_tensor(
+                    shape,
                     dtype=self.pipe.unet.dtype,
                     device=self.pipe.device,
-                    generator=self.generator.manual_seed(self.seed_schedule[end_frame]),
+                    generator=self.generator.manual_seed(self.seed_schedule[idx]),
                 )
             )
 
@@ -559,8 +592,20 @@ class BYOPFlow(BaseFlow):
             self.pipe.set_ip_adapter_scale(self.ip_adapter_schedule[frame_ids[0]])
 
         if hasattr(self.pipe, "callback"):
-            pipe_kwargs.update({"callback": self.coherence_callback.apply if self.use_coherence else None})
-            pipe_kwargs.update({"callback_steps": self.coherence_callback.steps if self.use_coherence else 1})
+            pipe_kwargs.update(
+                {
+                    "callback": self.coherence_callback.apply
+                    if self.use_coherence
+                    else None
+                }
+            )
+            pipe_kwargs.update(
+                {
+                    "callback_steps": self.coherence_callback.steps
+                    if self.use_coherence
+                    else 1
+                }
+            )
 
         pipe_kwargs.update(self.additional_pipeline_arguments)
 
@@ -609,10 +654,9 @@ class BYOPFlow(BaseFlow):
 
         for batch_idx, batch in enumerate(batchgen):
             output = self.run_inference(batch)
-            if hasattr(output, "images"):
-                images = output.images
-            elif hasattr(output, "frames"):
-                images = output.frames
+            output = FlowOutput(output)
+
+            images = output.images
 
             if self.use_color_matching_only and hasattr(output, "images"):
                 images = self.apply_color_matching(images)
@@ -626,6 +670,7 @@ class BYOPFlow(BaseFlow):
                     images = self.apply_color_matching(images)
 
                 self.image_input = self.preprocessor(images)
+
             if self.use_motion:
                 images = self.apply_motion(images, batch)
                 if self.use_color_matching:

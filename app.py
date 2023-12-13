@@ -8,10 +8,13 @@ from wonderwords import RandomWord
 
 from generate import run
 from session import load_session, save_session
-from utils import (get_audio_key_frame_information,
-                   get_video_frame_information, save_video, set_xformers)
+from utils import (
+    get_audio_key_frame_information,
+    get_video_frame_information,
+    save_video,
+    set_xformers,
+)
 
-AUTOSAVE = os.getenv("GIFFUSION_AUTO_SAVE", True)
 ORG_ID = os.getenv("ORG_ID", None)
 REPO_ID = os.getenv("REPO_ID", "giffusion")
 DEBUG = os.getenv("DEBUG_MODE", "false").lower() == "true"
@@ -29,7 +32,14 @@ wordgen = RandomWord()
 
 
 def load_pipeline(
-    model_name, pipeline_name, controlnet, adapter, lora, use_ip_adapter, custom_pipeline, pipe
+    model_name,
+    pipeline_name,
+    controlnet,
+    adapter,
+    lora,
+    use_ip_adapter,
+    custom_pipeline,
+    pipe,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -113,15 +123,25 @@ def load_pipeline(
             )
 
         if lora:
-            pipe.load_lora_weights(lora)
+            pipe.load_lora_weights(lora, cache_dir=MODEL_PATH)
 
         if hasattr(pipe, "load_ip_adapter"):
             if "XL" in pipe.__class__.__name__:
                 pipe.load_ip_adapter(
-                    "h94/IP-Adapter", subfolder="sdxl_models", weight_name="ip-adapter_sdxl.bin", torch_dtype=torch.float16
+                    "h94/IP-Adapter",
+                    subfolder="sdxl_models",
+                    weight_name="ip-adapter_sdxl.bin",
+                    torch_dtype=torch.float16,
+                    cache_dir=MODEL_PATH,
                 )
             else:
-                pipe.load_ip_adapter("h94/IP-Adapter", subfolder="models", weight_name="ip-adapter_sd15.bin", torch_dtype=torch.float16)
+                pipe.load_ip_adapter(
+                    "h94/IP-Adapter",
+                    subfolder="models",
+                    weight_name="ip-adapter_sd15.bin",
+                    torch_dtype=torch.float16,
+                    cache_dir=MODEL_PATH,
+                )
 
         if hasattr(pipe, "enable_model_cpu_offload"):
             pipe.enable_model_cpu_offload()
@@ -346,7 +366,9 @@ with demo:
                         adapter = gr.Textbox(label="T2I Adapter Checkpoint")
 
                     custom_pipeline = gr.Textbox(label="Custom Pipeline")
-                    use_ip_adapter = gr.Checkbox(interactive=True, label="Use IP Adapter", value=False)
+                    use_ip_adapter = gr.Checkbox(
+                        interactive=True, label="Use IP Adapter", value=False
+                    )
 
                 with gr.Column():
                     with gr.Row():
@@ -572,7 +594,9 @@ with demo:
                     )
                 with gr.Tab("Image Prompt"):
                     image_prompt_input = gr.Image(label="Image Prompt", type="pil")
-                    ip_adapter_scale = gr.Textbox("0:(0.8)", label="IP Adapter Scale Schedule")
+                    ip_adapter_scale = gr.Textbox(
+                        "0:(0.8)", label="IP Adapter Scale Schedule"
+                    )
 
             with gr.Row():
                 negative_prompt_input = gr.Textbox(
@@ -621,7 +645,16 @@ with demo:
 
     load_pipeline_btn.click(
         load_pipeline,
-        [model_name, pipeline_name, controlnet, adapter, lora, use_ip_adapter, custom_pipeline, pipe],
+        [
+            model_name,
+            pipeline_name,
+            controlnet,
+            adapter,
+            lora,
+            use_ip_adapter,
+            custom_pipeline,
+            pipe,
+        ],
         [pipe, load_message],
     )
 

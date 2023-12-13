@@ -1,1 +1,1 @@
-from .flow_byop import BYOPFlow
+from .flow_byop import BYOPFlow  # noqa F401
