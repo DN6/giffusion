@@ -10,15 +10,9 @@ from PIL import Image
 from torchvision.transforms import ToPILImage, ToTensor
 
 from preprocessor import Preprocessor
-from utils import (
-    apply_lab_color_matching,
-    apply_transformation2D,
-    curve_from_cn_string,
-    get_mel_reduce_func,
-    load_video_frames,
-    parse_key_frames,
-    slerp,
-)
+from utils import (apply_lab_color_matching, apply_transformation2D,
+                   curve_from_cn_string, get_mel_reduce_func,
+                   load_video_frames, parse_key_frames, slerp)
 
 from .flow_base import BaseFlow
 
@@ -436,10 +430,10 @@ class BYOPFlow(BaseFlow):
         if pipe_class == "StableVideoDiffusionPipeline":
             shape = (
                 1,
-                16,
+                self.pipe.unet.num_frames,
                 self.num_latent_channels,
-                self.height // self.vae_scale_factor,
-                self.width // self.vae_scale_factor,
+                576 // self.vae_scale_factor,
+                1024 // self.vae_scale_factor,
             )
 
         else:
