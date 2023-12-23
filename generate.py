@@ -4,20 +4,15 @@ import os
 from datetime import datetime
 
 import typer
-from diffusers.schedulers import (
-    DDIMScheduler,
-    DDPMScheduler,
-    DEISMultistepScheduler,
-    DPMSolverSinglestepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    KDPM2AncestralDiscreteScheduler,
-    LCMScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    RePaintScheduler,
-    UniPCMultistepScheduler,
-)
+from diffusers.schedulers import (DDIMScheduler, DDPMScheduler,
+                                  DEISMultistepScheduler,
+                                  DPMSolverSinglestepScheduler,
+                                  EulerAncestralDiscreteScheduler,
+                                  EulerDiscreteScheduler,
+                                  KDPM2AncestralDiscreteScheduler,
+                                  LCMScheduler, LMSDiscreteScheduler,
+                                  PNDMScheduler, RePaintScheduler,
+                                  UniPCMultistepScheduler)
 from diffusers.utils.logging import disable_progress_bar
 from tqdm import tqdm
 

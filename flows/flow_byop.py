@@ -17,24 +17,6 @@ from utils import (apply_lab_color_matching, apply_transformation2D,
 from .flow_base import BaseFlow
 
 
-class FlowOutput:
-    def __init__(self, output) -> None:
-        self.images = self.postprocess_output(output)
-
-    def postprocess_output(self, output):
-        if hasattr(output, "frames"):
-            output = []
-            # flatten frames list if necessary
-            for frames in output.frames:
-                for frame in frames:
-                    output.append(frame)
-
-            else:
-                output = output.images
-
-        return output
-
-
 class MotionCallback:
     def __init__(self, animation_args, padding_mode="border"):
         self.zoom = animation_args.get("zoom", curve_from_cn_string("0:(1.0)"))
@@ -374,6 +356,11 @@ class BYOPFlow(BaseFlow):
     @torch.no_grad()
     def get_prompt_embeddings(self, key_frames, interpolation_config):
         output = {}
+        is_single_frame = len(key_frames) == 1
+        if is_single_frame:
+            prompt = key_frames[0][1]
+            output[0] = self.prompt_to_embedding(prompt)
+            return output
 
         for idx, (start_key_frame, end_key_frame) in enumerate(
             zip(key_frames, key_frames[1:])
@@ -412,6 +399,11 @@ class BYOPFlow(BaseFlow):
 
     def get_prompts(self, key_frames, integer=True, method="linear"):
         output = {}
+        is_single_frame = len(key_frames) == 1
+        if is_single_frame:
+            output[0] = key_frames[0][1]
+            return output
+
         key_frame_series = pd.Series([np.nan for a in range(self.max_frames)])
         for frame_idx, prompt in key_frames:
             key_frame_series[frame_idx] = prompt
@@ -426,23 +418,12 @@ class BYOPFlow(BaseFlow):
     def get_init_latents(self, key_frames, interpolation_config):
         output = {}
 
-        pipe_class = self.pipe.__class__.__name__
-        if pipe_class == "StableVideoDiffusionPipeline":
-            shape = (
-                1,
-                self.pipe.unet.num_frames,
-                self.num_latent_channels,
-                576 // self.vae_scale_factor,
-                1024 // self.vae_scale_factor,
-            )
-
-        else:
-            shape = (
-                1,
-                self.num_latent_channels,
-                self.height // self.vae_scale_factor,
-                self.width // self.vae_scale_factor,
-            )
+        shape = (
+            1,
+            self.num_latent_channels,
+            self.height // self.vae_scale_factor,
+            self.width // self.vae_scale_factor,
+        )
 
         start_latent = randn_tensor(
             shape,
@@ -450,6 +431,11 @@ class BYOPFlow(BaseFlow):
             device=self.pipe.device,
             generator=self.generator,
         )
+
+        is_single_frame = len(key_frames) == 1
+        if is_single_frame:
+            output[0] = start_latent
+            return output
 
         for idx, (start_key_frame, end_key_frame) in enumerate(
             zip(key_frames, key_frames[1:])
@@ -648,8 +634,6 @@ class BYOPFlow(BaseFlow):
 
         for batch_idx, batch in enumerate(batchgen):
             output = self.run_inference(batch)
-            output = FlowOutput(output)
-
             images = output.images
 
             if self.use_color_matching_only and hasattr(output, "images"):
@@ -664,8 +648,6 @@ class BYOPFlow(BaseFlow):
                     images = self.apply_color_matching(images)
 
                 self.image_input = self.preprocessor(images)
-
-            if self.use_motion:
                 images = self.apply_motion(images, batch)
                 if self.use_color_matching:
                     images = self.apply_color_matching(images)
