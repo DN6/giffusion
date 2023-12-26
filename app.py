@@ -4,6 +4,7 @@ import os
 import gradio as gr
 import torch
 from controlnet_aux.processor import MODELS as CONTROLNET_PROCESSORS
+from pyexpat import model
 from wonderwords import RandomWord
 
 from generate import run
@@ -49,9 +50,7 @@ def load_pipeline(
             del pipe
             torch.cuda.empty_cache()
 
-        success_message = (
-            f"Successfully loaded Pipeline: {pipeline_name} with {model_name}"
-        )
+        model_options = ""
         pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
 
         if controlnet and adapter:
@@ -83,7 +82,7 @@ def load_pipeline(
                 cache_dir=MODEL_PATH,
                 custom_pipeline=custom_pipeline if custom_pipeline else None,
             )
-            success_message = f"Successfully loaded Pipeline: {pipeline_name} with {model_name} and {controlnets}"
+            model_options += f" ControlNet: {controlnets}"
 
         elif adapter:
             from diffusers import T2IAdapter
@@ -110,7 +109,7 @@ def load_pipeline(
                 cache_dir=MODEL_PATH,
                 custom_pipeline=custom_pipeline if custom_pipeline else None,
             )
-            success_message = f"Successfully loaded Pipeline: {pipeline_name} with {model_name} and {adapters}"
+            model_options += f" T2I Adapter: {adapters}"
 
         else:
             pipe = pipe_cls.from_pretrained(
@@ -123,9 +122,16 @@ def load_pipeline(
             )
 
         if lora:
-            pipe.load_lora_weights(lora, cache_dir=MODEL_PATH)
+            loras = [lora.strip() for lora in lora.split(",")]
+            for _lora in loras:
+                pipe.load_lora_weights(_lora, cache_dir=MODEL_PATH)
 
-        if hasattr(pipe, "load_ip_adapter"):
+            model_options += f" LoRA: {loras}"
+
+        if use_ip_adapter:
+            if not hasattr(pipe, "load_ip_adapter"):
+                raise gr.Error(f"Pipeline {pipeline_name} does not support IP Adapter")
+
             if "XL" in pipe.__class__.__name__:
                 pipe.load_ip_adapter(
                     "h94/IP-Adapter",
@@ -154,11 +160,12 @@ def load_pipeline(
         if USE_XFORMERS:
             pipe.enable_xformers_memory_efficient_attention()
 
+        success_message = f"Successfully loaded Pipeline: {pipeline_name} with {model_name} and {model_options}"
+
         return pipe, success_message
 
     except Exception as e:
-        print(e)
-        return None, f"Failed to Load Pipeline: {pipeline_name} with {model_name}"
+        raise gr.Error(e)
 
 
 def generate_prompt(fps, topics=""):
