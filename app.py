@@ -9,12 +9,8 @@ from wonderwords import RandomWord
 
 from generate import run
 from session import load_session, save_session
-from utils import (
-    get_audio_key_frame_information,
-    get_video_frame_information,
-    save_video,
-    set_xformers,
-)
+from utils import (get_audio_key_frame_information,
+                   get_video_frame_information, save_video, set_xformers)
 
 ORG_ID = os.getenv("ORG_ID", None)
 REPO_ID = os.getenv("REPO_ID", "giffusion")
