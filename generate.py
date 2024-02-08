@@ -1,6 +1,8 @@
+import torch
 import json
 import logging
 import os
+import gc
 from datetime import datetime
 
 import typer
@@ -236,8 +238,12 @@ def run(
             img_save_path = f"{run_image_save_path}/{frame_idx:04d}.png"
             image.save(img_save_path)
 
-            yield image, img_save_path
+            yield img_save_path
 
+            del image
+            gc.collect()
+
+    torch.cuda.empty_cache()
 
 if __name__ == "__main__":
     typer.run(run)

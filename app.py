@@ -1,14 +1,14 @@
 import importlib
 import os
+import gc
 
 import gradio as gr
 import torch
 from controlnet_aux.processor import MODELS as CONTROLNET_PROCESSORS
-from pyexpat import model
 from wonderwords import RandomWord
 
 from generate import run
-from session import load_session, save_session
+from session import load_session, save_session, fetch_available_models, fetch_available_pipelines
 from utils import (get_audio_key_frame_information,
                    get_video_frame_information, save_video, set_xformers)
 
@@ -23,6 +23,7 @@ os.makedirs(MODEL_PATH, exist_ok=True)
 
 USE_XFORMERS = set_xformers()
 CONTROLNET_PROCESSORS = ["no-processing"] + list(CONTROLNET_PROCESSORS.keys())
+PREVIEW_LIMIT = os.getenv("PREVIEW_LIMIT", 5)
 
 prompt_generator = gr.Interface.load("spaces/doevent/prompt-generator")
 wordgen = RandomWord()
@@ -45,6 +46,7 @@ def load_pipeline(
         if pipe is not None:
             del pipe
             torch.cuda.empty_cache()
+            gc.collect()
 
         model_options = ""
         pipe_cls = getattr(importlib.import_module("diffusers"), pipeline_name)
@@ -110,7 +112,6 @@ def load_pipeline(
         else:
             pipe = pipe_cls.from_pretrained(
                 model_name,
-                use_auth_token=True,
                 torch_dtype=torch.float16,
                 safety_checker=None,
                 cache_dir=MODEL_PATH,
@@ -149,9 +150,6 @@ def load_pipeline(
             pipe.enable_model_cpu_offload()
         else:
             pipe.to(device)
-
-        if hasattr(pipe, "enable_vae_tiling"):
-            pipe.enable_vae_tiling()
 
         if USE_XFORMERS:
             pipe.enable_xformers_memory_efficient_attention()
@@ -215,6 +213,10 @@ def _save_video(frames, run_path, fps, output_format):
     )
 
     return output
+
+
+def _fetch_available_models():
+    return fetch_available_models(MODEL_PATH)
 
 
 def predict(
@@ -314,10 +316,13 @@ def predict(
         )
 
         output_frames = []
-        for image, image_save_path in image_generator:
+        for image_save_path in image_generator:
             frame_id = image_save_path.split("/")[-1].split(".")[0]
             output_frames.append((image_save_path, frame_id))
+            if len(output_frames) > PREVIEW_LIMIT:
+                output_frames.pop(0)
             yield output_frames
+
     except Exception as e:
         raise gr.Error(e)
 
@@ -355,11 +360,11 @@ with demo:
 
             with gr.Accordion("Pipeline Settings: Load Models and Pipelines"):
                 with gr.Column():
-                    model_name = gr.Textbox(
-                        label="Model Name", value="runwayml/stable-diffusion-v1-5"
+                    model_name = gr.Dropdown(
+                        fetch_available_models(MODEL_PATH), label="Model Name", allow_custom_value=True
                     )
-                    pipeline_name = gr.Textbox(
-                        label="Pipeline Name", value="DiffusionPipeline"
+                    pipeline_name = gr.Dropdown(
+                        fetch_available_pipelines(), label="Pipeline Name", allow_custom_value=True
                     )
                     lora = gr.Textbox(label="LoRA Checkpoints")
 
@@ -485,7 +490,7 @@ with demo:
             with gr.Accordion("Animation Settings", open=False):
                 with gr.Tab("Interpolation"):
                     interpolation_type = gr.Dropdown(
-                        ["linear", "sine", "curve"],
+                        ["linear", "curve"],
                         value="linear",
                         label="Interpolation Type",
                         elem_id="interpolation_type",

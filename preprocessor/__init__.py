@@ -23,7 +23,7 @@ class Processor:
                                 canny, content_shuffle, zoe, mediapipe_face
             params (Optional[Dict]): parameters for the processor
         """
-        LOGGER.info("Loading %s".format(processor_id))
+        LOGGER.info(f"Loading {processor_id}")
 
         self.processor_id = processor_id
         self.processor = self.load_processor(self.processor_id)

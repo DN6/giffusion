@@ -4,7 +4,8 @@ import re
 import librosa
 import numpy as np
 import torch
-from keyframed.dsl import curve_from_cn_string
+import importlib
+from keyframed.dsl import curve_from_cn_string # noqa: F401
 from kornia.color import lab_to_rgb, rgb_to_lab
 from kornia.geometry.transform import get_affine_matrix2d, warp_affine
 from PIL import Image
@@ -219,11 +220,9 @@ def save_parameters(save_path, parameters):
 
 def set_xformers():
     torch_is_version_2 = int(torch.__version__.split(".")[0]) == 2
-    try:
-        import xformers
-
+    if importlib.util.find_spec("xformers"):
         xformers_available = True
-    except (ImportError, ModuleNotFoundError):
+    else:
         xformers_available = False
 
     if (not torch_is_version_2) and xformers_available:
