@@ -215,10 +215,6 @@ def _save_video(frames, run_path, fps, output_format):
     return output
 
 
-def _fetch_available_models():
-    return fetch_available_models(MODEL_PATH)
-
-
 def predict(
     run_path,
     pipe,

@@ -27,6 +27,13 @@ Install the requirements
 pip install -r requirements.txt
 ```
 
+Giffusion uses the Huggingface Hub to download models. Set the following environment variables to ensure that your model cache is set properly.
+
+```shell
+export HF_HOME=<path to your Huggingface Hub home directory> # defaults to ~/.cache/huggingface
+export MODEL_PATH=$HF_HOME/hub
+```
+
 Start the application
 
 ```
